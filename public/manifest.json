@@ -1,0 +1,26 @@
+{
+  "name": "Financia",
+  "short_name": "Financia",
+  "description": "Tu plata, organizada como nunca. App premium de finanzas personales.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#1a1625",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait",
+  "categories": ["finance", "productivity"],
+  "lang": "es-AR",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

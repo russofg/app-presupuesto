@@ -1,36 +1,121 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Financia — Your money, beautifully organized
+
+A premium personal finance web application built with Next.js 16, React 19, TypeScript, Firebase, and a modern design system inspired by Copilot Money, Stripe, and Apple Wallet.
+
+## Features
+
+- **Dashboard** — Real-time financial overview with animated metrics, cash flow charts, and spending insights
+- **Transactions** — Full CRUD with filtering, search, categorization, and grouped date views
+- **Budgets** — Monthly budget tracking per category with progress bars and alerts
+- **Savings Goals** — Visual goal tracking with animated progress and fund management
+- **Categories** — Customizable categories with icons and colors
+- **Auth** — Secure authentication with Firebase (login, register, password reset)
+- **Onboarding** — 3-step premium wizard for new users
+- **Dark/Light Mode** — Elegant theme switching with system preference support
+- **Mobile-First** — Responsive design with dedicated mobile navigation
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16 (App Router) |
+| Language | TypeScript (strict) |
+| UI | React 19 + shadcn/ui + Tailwind CSS v4 |
+| Animations | Motion (Framer Motion) |
+| State | TanStack Query v5 |
+| Forms | React Hook Form + Zod v4 |
+| Auth | Firebase Authentication |
+| Database | Cloud Firestore |
+| Charts | Recharts |
+| Icons | Lucide React |
+| Toasts | Sonner |
+| Theme | next-themes |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- A Firebase project with Authentication and Firestore enabled
+
+### Setup
+
+1. Clone the repository
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Configure Firebase — edit `.env.local` with your Firebase project credentials:
+
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+```
+
+4. Deploy Firestore rules and indexes:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
+5. Run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/
+│   ├── (auth)/           # Login, Register, Forgot Password
+│   ├── (app)/            # Authenticated routes
+│   │   ├── dashboard/    # Main dashboard + components
+│   │   ├── transactions/ # Transaction list + dialog
+│   │   ├── budgets/      # Budget management
+│   │   ├── goals/        # Savings goals
+│   │   ├── categories/   # Category management
+│   │   ├── settings/     # User preferences
+│   │   └── onboarding/   # New user wizard
+│   ├── globals.css       # Design tokens + theme
+│   └── layout.tsx        # Root layout + providers
+├── components/
+│   ├── layout/           # App shell, sidebar, mobile nav
+│   ├── ui/               # shadcn/ui components
+│   ├── animated-number.tsx
+│   ├── category-icon.tsx
+│   ├── empty-state.tsx
+│   └── loading-skeleton.tsx
+├── hooks/                # Custom hooks (auth, queries, mutations)
+├── lib/
+│   ├── services/         # Firebase auth + Firestore operations
+│   ├── firebase.ts       # Firebase initialization
+│   ├── format.ts         # Currency, date formatting
+│   ├── motion.ts         # Animation variants
+│   ├── providers.tsx      # App providers (Query, Theme, Auth)
+│   └── utils.ts          # shadcn utilities
+└── types/                # Zod schemas + TypeScript types
+```
 
-## Learn More
+## Firestore Data Model
 
-To learn more about Next.js, take a look at the following resources:
+- `settings/{userId}` — User preferences and onboarding status
+- `transactions/{id}` — Income and expense records (owned by userId)
+- `categories/{id}` — Custom and default categories (owned by userId)
+- `budgets/{id}` — Monthly budget limits per category (owned by userId)
+- `savingsGoals/{id}` — Savings targets with progress tracking (owned by userId)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+All collections enforce ownership via Firestore security rules.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## License
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Private — All rights reserved.
