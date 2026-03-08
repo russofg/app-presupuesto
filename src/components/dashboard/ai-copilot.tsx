@@ -14,11 +14,30 @@ export function AiCopilot({ totalIncome, totalExpenses, username }: AiCopilotPro
   const [insight, setInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
+
   useEffect(() => {
-    // Para no gastar cuotas al navegar constantemente, 
-    // hacemos que solo pida cuando hay datos significativos, 
-    // y damos un delay para no bloquear la renderización inicial.
     async function fetchInsight() {
+      // Clave única por usuario + mes para limpiar el cache automáticamente cada mes
+      const now = new Date();
+      const cacheKey = `ai_insight_${username}_${now.getFullYear()}_${now.getMonth()}`;
+
+      // Intentar reutilizar el cache antes de llamar a la API
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const { text, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_TTL_MS) {
+            setInsight(text);
+            setLoading(false);
+            return; // ← salimos sin llamar a la API
+          }
+        }
+      } catch {
+        // Si el localStorage falla (por ejemplo, en modo privado) ignoramos y seguimos
+      }
+
+      // No había cache válido → llamamos a la API
       try {
         const response = await fetch("/api/insights", {
           method: "POST",
@@ -27,9 +46,12 @@ export function AiCopilot({ totalIncome, totalExpenses, username }: AiCopilotPro
         });
         const data = await response.json();
         if (data.insight) {
-          // Remover asteriscos o formato Markdown básico que a veces devuelve el modelo
           const cleanText = data.insight.replace(/[\*\_]/g, "");
           setInsight(cleanText);
+          // Guardar en cache
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({ text: cleanText, timestamp: Date.now() }));
+          } catch { /* ignorar errores de cuota de localStorage */ }
         }
       } catch (error) {
         console.error("AI Copilot request failed", error);
