@@ -37,31 +37,39 @@ export async function GET(request: Request) {
   const headers = { Authorization: `Bearer ${accessToken}` };
 
   try {
-    // Fetch user info, balance and payments in parallel
-    const [meRes, balanceRes, paymentsRes] = await Promise.all([
-      fetch(`${MP_API_BASE}/users/me`, { headers }),
-      fetch(`${MP_API_BASE}/v1/account/balance`, { headers }),
-      fetch(
-        `${MP_API_BASE}/v1/payments/search?sort=date_created&criteria=desc&limit=${limit}&begin_date=${beginOfMonth}&end_date=${endOfMonth}`,
-        { headers }
-      ),
-    ]);
-
+    // Step 1: Get current user ID (needed for balance user-specific endpoint)
+    const meRes = await fetch(`${MP_API_BASE}/users/me`, { headers });
     if (!meRes.ok) {
       const err = await meRes.text();
       return NextResponse.json({ error: `Error al obtener usuario MP: ${err}` }, { status: meRes.status });
     }
-
     const me = await meRes.json();
     const myUserId = String(me.id);
 
-    // Balance — non-blocking, gracefully omit if not available
+    // Step 2: Fetch balance + payments in parallel (now we have the user ID)
+    const paymentsUrl = `${MP_API_BASE}/v1/payments/search?sort=date_created&criteria=desc&limit=${limit}&begin_date=${beginOfMonth}&end_date=${endOfMonth}`;
+    const [balanceRes, paymentsRes] = await Promise.all([
+      fetch(`${MP_API_BASE}/users/${myUserId}/mercadopago_account/balance`, { headers }),
+      fetch(paymentsUrl, { headers }),
+    ]);
+
+    // Parse balance (try multiple field names)
     let balance: number | null = null;
     let balanceCurrency = "ARS";
     if (balanceRes.ok) {
       const balData = await balanceRes.json();
-      balance = balData.available_balance ?? balData.total ?? null;
+      console.log("[MP Balance]", JSON.stringify(balData).slice(0, 400));
+      balance = balData.available_balance ?? balData.total_amount ?? balData.total ?? null;
       balanceCurrency = balData.currency_id ?? "ARS";
+    } else {
+      // Fallback to generic endpoint
+      const fallbackRes = await fetch(`${MP_API_BASE}/v1/account/balance`, { headers });
+      if (fallbackRes.ok) {
+        const balData = await fallbackRes.json();
+        console.log("[MP Balance fallback]", JSON.stringify(balData).slice(0, 400));
+        balance = balData.available_balance ?? balData.total ?? null;
+        balanceCurrency = balData.currency_id ?? "ARS";
+      }
     }
 
     if (!paymentsRes.ok) {
@@ -75,10 +83,8 @@ export async function GET(request: Request) {
     const movements = results
       .filter((p: any) => p.status === "approved")
       .map((p: any) => {
-        const payerId = String(p.payer?.id ?? "");
         const collectorId = String(p.collector_id ?? p.collector?.id ?? "");
         const isIncome = collectorId === myUserId;
-
         return {
           id: String(p.id),
           date: p.date_approved ?? p.date_created,
