@@ -144,6 +144,8 @@ export const userSettingsSchema = z.object({
   deficitCoveredByMonth: z.record(z.string(), z.number()).optional(),
   totalXP: z.number().int().min(0).default(0),
   unlockedAchievements: z.array(z.string()).default([]),
+  biometricEnabled: z.boolean().default(false),
+  biometricCredentialId: z.string().nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

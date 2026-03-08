@@ -5,11 +5,15 @@ import { SmoothScroll } from "@/components/layout/smooth-scroll";
 
 import { CustomCursor } from "@/components/custom-cursor";
 
+import { AppLock } from "@/components/layout/app-lock";
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SmoothScroll>
       <CustomCursor />
-      <AppShell>{children}</AppShell>
+      <AppLock>
+        <AppShell>{children}</AppShell>
+      </AppLock>
     </SmoothScroll>
   );
 }

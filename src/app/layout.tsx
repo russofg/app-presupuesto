@@ -39,10 +39,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning data-scroll-behavior="smooth">
-      <head>
-        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/icon.svg" />
-      </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <Providers>{children}</Providers>
       </body>

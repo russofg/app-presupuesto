@@ -533,6 +533,47 @@ export default function SettingsPage() {
           Seguridad y cuenta
         </div>
         <div className="rounded-xl border border-border/50 bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Bloqueo con Biometría (Passkey)</p>
+              <p className="text-xs text-muted-foreground">Requerir huella o rostro al abrir la app.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch 
+                checked={!!(settings as any)?.biometricEnabled} 
+                onCheckedChange={async (checked) => {
+                  if (!user) return;
+                  if (checked) {
+                    try {
+                      const { isBiometricsSupported, registerLocalBiometrics } = await import("@/lib/biometrics");
+                      const supported = await isBiometricsSupported();
+                      if (!supported) {
+                        toast.error("Tu dispositivo o navegador no soporta biometría nativa.");
+                        return;
+                      }
+                      const credId = await registerLocalBiometrics(user.email || "Usuario Financia");
+                      if (credId) {
+                        await updateUserSettings(user.uid, { biometricEnabled: true, biometricCredentialId: credId });
+                        await refreshSettings();
+                        toast.success("Biometría configurada correctamente.");
+                      } else {
+                        toast.error("Se canceló el registro biométrico.");
+                      }
+                    } catch (e) {
+                      toast.error("Falló la configuración biométrica.");
+                    }
+                  } else {
+                    await updateUserSettings(user.uid, { biometricEnabled: false, biometricCredentialId: null });
+                    await refreshSettings();
+                    toast.success("Bloqueo biométrico desactivado.");
+                  }
+                }} 
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-border/50" />
+
           {isPasswordUser && (
             <>
               <div className="flex items-center justify-between">
