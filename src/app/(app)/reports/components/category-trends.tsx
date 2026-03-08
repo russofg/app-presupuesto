@@ -87,53 +87,55 @@ export function CategoryTrends({ transactions, categories, currency }: CategoryT
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={data}>
-          <XAxis
-            dataKey="month"
-            axisLine={false}
-            tickLine={false}
-            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-          />
-          <YAxis
-            axisLine={false}
-            tickLine={false}
-            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-            tickFormatter={(v) => formatCompactCurrency(v, currency)}
-            width={65}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
-              borderRadius: "12px",
-              fontSize: "12px",
-            }}
-            formatter={(value?: number, name?: string) => {
-              if (value == null) return ["", ""];
-              const cat = topCats.find((c) => c.id === name);
-              return [formatCurrency(value, currency), cat?.name ?? ""];
-            }}
-          />
-          <Legend
-            formatter={(value) => {
-              const cat = topCats.find((c) => c.id === value);
-              return <span className="text-[11px]">{cat?.name ?? ""}</span>;
-            }}
-          />
-          {topCats.map((cat, i) => (
-            <Line
-              key={cat.id}
-              type="monotone"
-              dataKey={cat.id}
-              stroke={CHART_COLORS[i % CHART_COLORS.length]}
-              strokeWidth={2}
-              dot={{ r: 3, fill: CHART_COLORS[i % CHART_COLORS.length] }}
-              activeDot={{ r: 5 }}
+      <div className="w-full h-[280px] min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data}>
+            <XAxis
+              dataKey="month"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
             />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tickFormatter={(v) => formatCompactCurrency(v, currency)}
+              width={65}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "12px",
+                fontSize: "12px",
+              }}
+              formatter={(value?: number, name?: string) => {
+                if (value == null) return ["", ""];
+                const cat = topCats.find((c) => c.id === name);
+                return [formatCurrency(value, currency), cat?.name ?? ""];
+              }}
+            />
+            <Legend
+              formatter={(value) => {
+                const cat = topCats.find((c) => c.id === value);
+                return <span className="text-[11px]">{cat?.name ?? ""}</span>;
+              }}
+            />
+            {topCats.map((cat, i) => (
+              <Line
+                key={cat.id}
+                type="monotone"
+                dataKey={cat.id}
+                stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                strokeWidth={2}
+                dot={{ r: 3, fill: CHART_COLORS[i % CHART_COLORS.length] }}
+                activeDot={{ r: 5 }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

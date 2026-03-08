@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
+import { Magnetic } from "@/components/magnetic";
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -98,27 +99,28 @@ export function SidebarNav() {
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={playPop}
-              className={cn(
-                "relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200",
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-              )}
-            >
-              {isActive && (
-                <motion.div
-                  layoutId="sidebar-active"
-                  className="absolute inset-0 bg-primary/10 rounded-xl"
-                  transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                />
-              )}
-              <item.icon className="w-5 h-5 relative z-10" />
-              <span className="relative z-10">{item.label}</span>
-            </Link>
+            <Magnetic key={item.href} strength={0.2} className="block w-full">
+              <Link
+                href={item.href}
+                onClick={playPop}
+                className={cn(
+                  "relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 w-full",
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                )}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebar-active"
+                    className="absolute inset-0 bg-primary/10 rounded-xl"
+                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                  />
+                )}
+                <item.icon className="w-5 h-5 relative z-10" />
+                <span className="relative z-10">{item.label}</span>
+              </Link>
+            </Magnetic>
           );
         })}
       </nav>

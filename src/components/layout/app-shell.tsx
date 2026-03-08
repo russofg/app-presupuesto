@@ -7,6 +7,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { MobileNav } from "./mobile-nav";
 import { FloatingActionButton } from "@/components/fab";
 import { DashboardSkeleton } from "@/components/loading-skeleton";
+import { PageTransition } from "./page-transition";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, settings, loading } = useAuth();
@@ -52,8 +53,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <SidebarNav />
-      <main className="flex-1 min-h-screen pb-20 lg:pb-0">
-        {children}
+      <main className="flex-1 min-h-screen pb-20 lg:pb-0 flex flex-col relative w-full overflow-hidden">
+        <PageTransition>{children}</PageTransition>
       </main>
       <FloatingActionButton />
       <MobileNav />

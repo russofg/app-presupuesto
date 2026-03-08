@@ -75,35 +75,37 @@ export function MonthlyBars({ transactions, currency }: MonthlyBarsProps) {
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} vertical={false} />
-          <XAxis
-            dataKey="month"
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v) => formatCompactCurrency(v, currency)}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "12px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-              fontSize: "12px",
-            }}
-            formatter={(value?: number) => value != null ? [formatCurrency(value, currency)] : []}
-          />
-          <Bar dataKey="income" fill="var(--success)" radius={[4, 4, 0, 0]} maxBarSize={32} />
-          <Bar dataKey="expense" fill="var(--destructive)" radius={[4, 4, 0, 0]} maxBarSize={32} />
-        </BarChart>
-      </ResponsiveContainer>
+      <div className="w-full h-[280px] min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} vertical={false} />
+            <XAxis
+              dataKey="month"
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => formatCompactCurrency(v, currency)}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "var(--card)",
+                border: "1px solid var(--border)",
+                borderRadius: "12px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                fontSize: "12px",
+              }}
+              formatter={(value?: number) => value != null ? [formatCurrency(value, currency)] : []}
+            />
+            <Bar dataKey="income" fill="var(--success)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+            <Bar dataKey="expense" fill="var(--destructive)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

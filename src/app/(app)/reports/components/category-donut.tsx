@@ -60,56 +60,54 @@ export function CategoryDonut({ transactions, categories, currency, type }: Cate
       </div>
 
       <div className="flex flex-col sm:flex-row items-center gap-4">
-        <div className="w-44 h-44 shrink-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={48}
-                outerRadius={72}
-                paddingAngle={2}
-                dataKey="value"
-                strokeWidth={0}
-              >
-                {data.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "var(--card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "12px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                  fontSize: "12px",
-                }}
-                formatter={(value?: number) => value != null ? [formatCurrency(value, currency)] : []}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+        <div className="w-44 h-44 shrink-0 relative">
+          <PieChart width={176} height={176}>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={48}
+              outerRadius={72}
+              paddingAngle={2}
+              dataKey="value"
+              strokeWidth={0}
+            >
+              {data.map((entry, i) => (
+                <Cell key={i} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "var(--card)",
+                border: "1px solid var(--border)",
+                borderRadius: "12px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                fontSize: "12px",
+              }}
+              formatter={(value?: number) => value != null ? [formatCurrency(value, currency)] : []}
+            />
+          </PieChart>
         </div>
 
-        <div className="flex-1 w-full space-y-2">
+        <div className="flex-1 min-w-0 w-full space-y-2">
           {data.slice(0, 6).map((item) => (
             <div key={item.name} className="flex items-center gap-2.5">
               <CategoryIcon icon={item.icon} color={item.color} size="sm" />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium truncate">{item.name}</span>
-                  <span className="text-xs font-semibold tabular-nums ml-2">
+                  <span className="text-xs font-semibold tabular-nums shrink-0">
                     {formatCurrency(item.value, currency)}
                   </span>
                 </div>
-                <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden relative">
                   <div
-                    className="h-full rounded-full transition-all duration-500"
+                    className="h-full rounded-full transition-all duration-500 absolute left-0 top-0"
                     style={{ width: `${item.percentage}%`, backgroundColor: item.color }}
                   />
                 </div>
               </div>
-              <span className="text-[10px] font-medium text-muted-foreground tabular-nums w-8 text-right">
+              <span className="text-[10px] font-medium text-muted-foreground tabular-nums w-8 text-right shrink-0">
                 {formatPercentage(item.percentage)}
               </span>
             </div>

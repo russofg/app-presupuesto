@@ -28,7 +28,7 @@ import { DashboardSkeleton } from "@/components/loading-skeleton";
 import { MonthPicker } from "@/components/month-picker";
 import { HealthScoreRing } from "@/components/health-score-ring";
 import { StreakBadge } from "@/components/streak-badge";
-import { LevelBadge } from "@/components/level-badge";
+import { LevelCard3D } from "@/components/level-card-3d";
 import { AchievementsPanel } from "@/components/achievements-panel";
 import { MetricCard } from "./components/metric-card";
 import { CashflowChart } from "./components/cashflow-chart";
@@ -56,6 +56,7 @@ import {
   Trophy,
   Sparkles,
 } from "lucide-react";
+import { Magnetic } from "@/components/magnetic";
 import Link from "next/link";
 
 export default function DashboardPage() {
@@ -260,7 +261,8 @@ export default function DashboardPage() {
       className="p-4 sm:p-6 lg:p-8 space-y-5"
     >
       {/* Header */}
-      <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      {/* Header */}
+      <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <p className="text-sm font-medium text-muted-foreground">{greeting}</p>
@@ -269,49 +271,63 @@ export default function DashboardPage() {
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             {settings?.displayName?.split(" ")[0] || "vos"}
           </h1>
-          <div className="mt-2">
-            <LevelBadge
-              name={level.name}
-              icon={level.icon}
-              progress={level.progress}
-              xpToNext={level.xpToNext}
-              color={level.color}
-            />
-          </div>
         </div>
-        <div className="flex items-center gap-2">
+        
+        <div className="flex flex-wrap items-center gap-2">
           {transactions && transactions.length > 0 && (
-            <button
-              onClick={() => setWrapOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500/10 text-sm font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Resumen</span>
-            </button>
+            <Magnetic strength={0.3}>
+              <button
+                onClick={() => setWrapOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500/10 text-sm font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Resumen</span>
+              </button>
+            </Magnetic>
           )}
-          <button
-            onClick={() => setAchievementsOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
-          >
-            <Trophy className="w-3.5 h-3.5" />
-            {unlockedCount}/{achievements.length}
-          </button>
-          <Link
-            href="/reports"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted/50 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            Ver reportes
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-          <Link
-            href="/transactions"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Agregar movimiento</span>
-            <span className="sm:hidden">Agregar</span>
-          </Link>
+          <Magnetic strength={0.2}>
+            <button
+              onClick={() => setAchievementsOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+            >
+              <Trophy className="w-3.5 h-3.5" />
+              {unlockedCount}/{achievements.length}
+            </button>
+          </Magnetic>
+          <Magnetic strength={0.2}>
+            <Link
+              href="/reports"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted/50 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors block"
+            >
+              Ver reportes
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </Magnetic>
+          <Magnetic strength={0.3}>
+            <Link
+              href="/transactions"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors shrink-0 block"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Agregar movimiento</span>
+              <span className="sm:hidden">Agregar</span>
+            </Link>
+          </Magnetic>
         </div>
+      </motion.div>
+
+      {/* Gamification Banner */}
+      <motion.div variants={fadeInUp} className="w-full">
+        <LevelCard3D
+          name={level.name}
+          icon={level.icon}
+          progress={level.progress}
+          xpToNext={level.xpToNext}
+          totalXP={totalXP}
+          streakCount={streakCount}
+          color={level.color}
+          className="w-full h-[120px] sm:h-[140px]"
+        />
       </motion.div>
 
       {/* Month Picker */}
