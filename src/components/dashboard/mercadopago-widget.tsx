@@ -41,6 +41,9 @@ function formatDate(dateStr: string) {
 
 export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
   const [movements, setMovements] = useState<MpMovement[]>([]);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [balanceCurrency, setBalanceCurrency] = useState("ARS");
+  const [currentMonth, setCurrentMonth] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -55,6 +58,9 @@ export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Error al obtener movimientos");
       setMovements(data.movements ?? []);
+      if (data.balance !== null && data.balance !== undefined) setBalance(data.balance);
+      if (data.balanceCurrency) setBalanceCurrency(data.balanceCurrency);
+      if (data.month) setCurrentMonth(data.month);
       setExpanded(true);
     } catch (e: any) {
       setError(e.message);
@@ -93,7 +99,13 @@ export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
           </div>
           <div>
             <h3 className="text-sm font-bold tracking-tight">MercadoPago</h3>
-            <p className="text-xs text-muted-foreground">Tus últimos movimientos</p>
+            {balance !== null ? (
+              <p className="text-xs font-semibold text-[#009ee3]">
+                Saldo: {formatAmount(balance, balanceCurrency)}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Tus movimientos del mes</p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -143,15 +155,20 @@ export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
-            className="px-4 sm:px-5 pb-3 grid grid-cols-2 gap-3"
+            className="px-4 sm:px-5 pb-3 space-y-2"
           >
-            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-              <p className="text-xs text-muted-foreground mb-0.5">Ingresos</p>
-              <p className="text-sm font-bold text-emerald-500">{formatAmount(incomeTotal, "ARS")}</p>
-            </div>
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
-              <p className="text-xs text-muted-foreground mb-0.5">Egresos</p>
-              <p className="text-sm font-bold text-red-500">{formatAmount(expenseTotal, "ARS")}</p>
+            {currentMonth && (
+              <p className="text-xs text-muted-foreground capitalize font-medium">{currentMonth}</p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <p className="text-xs text-muted-foreground mb-0.5">Ingresos</p>
+                <p className="text-sm font-bold text-emerald-500">{formatAmount(incomeTotal, "ARS")}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                <p className="text-xs text-muted-foreground mb-0.5">Egresos</p>
+                <p className="text-sm font-bold text-red-500">{formatAmount(expenseTotal, "ARS")}</p>
+              </div>
             </div>
           </motion.div>
         )}

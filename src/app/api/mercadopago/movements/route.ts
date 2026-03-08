@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 
 const MP_API_BASE = "https://api.mercadopago.com";
 
-// Maps MercadoPago operation types to app categories
 function mapOperationType(type: string): string {
   const map: Record<string, string> = {
     regular_payment: "Compras",
@@ -28,14 +27,25 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get("limit") ?? "30", 10);
-  const offset = parseInt(searchParams.get("offset") ?? "0", 10);
+  const limit = parseInt(searchParams.get("limit") ?? "50", 10);
+
+  // Current month date range
+  const now = new Date();
+  const beginOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+  const headers = { Authorization: `Bearer ${accessToken}` };
 
   try {
-    // First, get the current user's own ID
-    const meRes = await fetch(`${MP_API_BASE}/v1/users/me`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    // Fetch user info, balance and payments in parallel
+    const [meRes, balanceRes, paymentsRes] = await Promise.all([
+      fetch(`${MP_API_BASE}/users/me`, { headers }),
+      fetch(`${MP_API_BASE}/v1/account/balance`, { headers }),
+      fetch(
+        `${MP_API_BASE}/v1/payments/search?sort=date_created&criteria=desc&limit=${limit}&begin_date=${beginOfMonth}&end_date=${endOfMonth}`,
+        { headers }
+      ),
+    ]);
 
     if (!meRes.ok) {
       const err = await meRes.text();
@@ -45,11 +55,14 @@ export async function GET(request: Request) {
     const me = await meRes.json();
     const myUserId = String(me.id);
 
-    // Fetch recent payments
-    const paymentsRes = await fetch(
-      `${MP_API_BASE}/v1/payments/search?sort=date_created&criteria=desc&limit=${limit}&offset=${offset}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
+    // Balance — non-blocking, gracefully omit if not available
+    let balance: number | null = null;
+    let balanceCurrency = "ARS";
+    if (balanceRes.ok) {
+      const balData = await balanceRes.json();
+      balance = balData.available_balance ?? balData.total ?? null;
+      balanceCurrency = balData.currency_id ?? "ARS";
+    }
 
     if (!paymentsRes.ok) {
       const err = await paymentsRes.text();
@@ -65,7 +78,6 @@ export async function GET(request: Request) {
         const payerId = String(p.payer?.id ?? "");
         const collectorId = String(p.collector_id ?? p.collector?.id ?? "");
         const isIncome = collectorId === myUserId;
-        const isExpense = payerId === myUserId;
 
         return {
           id: String(p.id),
@@ -80,16 +92,17 @@ export async function GET(request: Request) {
             ? `${p.payer.first_name} ${p.payer.last_name ?? ""}`.trim()
             : p.payer?.email ?? "–",
           status: p.status,
-          rawIsIncome: isIncome,
-          rawIsExpense: isExpense,
         };
       });
+
+    const month = now.toLocaleString("es-AR", { month: "long", year: "numeric" });
 
     return NextResponse.json({
       movements,
       total: data.paging?.total ?? movements.length,
-      limit,
-      offset,
+      balance,
+      balanceCurrency,
+      month,
     });
   } catch (error) {
     console.error("MercadoPago API Error:", error);
