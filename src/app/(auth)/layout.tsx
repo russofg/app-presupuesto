@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,9 +16,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
-            <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mb-8">
-              <Sparkles className="w-7 h-7 text-primary-foreground" />
-            </div>
+            <Image 
+              src="/logo.png" 
+              alt="Financia Logo" 
+              width={180}
+              height={180}
+              className="object-contain overflow-visible drop-shadow-[0_0_30px_rgba(124,58,237,0.4)] mb-2 -ml-6"
+              priority
+            />
             <h1 className="text-4xl font-bold tracking-tight mb-4">
               Tu plata,
               <br />
@@ -75,11 +81,16 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="w-full max-w-[400px]"
         >
-          <div className="lg:hidden flex items-center gap-2.5 mb-10">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold tracking-tight">Financia</span>
+          <div className="lg:hidden flex items-center gap-0 mb-8">
+            <Image 
+              src="/logo.png" 
+              alt="Financia Logo" 
+              width={110}
+              height={110}
+              className="object-contain overflow-visible drop-shadow-[0_0_15px_rgba(124,58,237,0.3)] -ml-4"
+              priority
+            />
+            <span className="text-2xl font-bold tracking-tight -ml-1">Financia</span>
           </div>
           {children}
         </motion.div>

@@ -42,6 +42,7 @@ import { MonthlyWrap } from "./components/monthly-wrap";
 import { TransactionDialog } from "../transactions/components/transaction-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { InsightsCard } from "./components/insights-card";
+import { AiCopilot } from "@/components/dashboard/ai-copilot";
 import { DollarConverter } from "@/components/dollar-converter";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { generateInsights } from "@/lib/insights";
@@ -58,6 +59,7 @@ import {
 } from "lucide-react";
 import { Magnetic } from "@/components/magnetic";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function DashboardPage() {
   const queryClient = useQueryClient();
@@ -263,14 +265,27 @@ export default function DashboardPage() {
       {/* Header */}
       {/* Header */}
       <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-sm font-medium text-muted-foreground">{greeting}</p>
-            <StreakBadge count={streakCount} />
+        <div className="relative flex items-center justify-between w-full sm:w-auto h-16">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-sm font-medium text-muted-foreground">{greeting}</p>
+              <StreakBadge count={streakCount} />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              {settings?.displayName?.split(" ")[0] || "vos"}
+            </h1>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            {settings?.displayName?.split(" ")[0] || "vos"}
-          </h1>
+          {/* Mobile Logo */}
+          <div className="lg:hidden absolute right-0 top-1/2 -translate-y-1/2 -mr-4 flex-shrink-0">
+            <Image 
+              src="/logo.png" 
+              alt="Financia Logo" 
+              width={110}
+              height={110}
+              className="object-contain overflow-visible drop-shadow-[0_0_15px_rgba(124,58,237,0.3)]"
+              priority
+            />
+          </div>
         </div>
         
         <div className="flex flex-wrap items-center gap-2">
@@ -327,6 +342,15 @@ export default function DashboardPage() {
           streakCount={streakCount}
           color={level.color}
           className="w-full h-[120px] sm:h-[140px]"
+        />
+      </motion.div>
+
+      {/* AI Copilot */}
+      <motion.div variants={fadeInUp}>
+        <AiCopilot 
+          totalIncome={metrics.income}
+          totalExpenses={metrics.expenses}
+          username={settings?.displayName?.split(" ")[0] || "Usuario"}
         />
       </motion.div>
 

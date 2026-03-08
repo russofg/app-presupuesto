@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { Magnetic } from "@/components/magnetic";
@@ -71,11 +72,16 @@ export function SidebarNav() {
   return (
     <aside className="hidden lg:flex flex-col w-64 h-screen border-r border-border/50 bg-sidebar sticky top-0">
       <div className="p-6">
-        <Link href="/dashboard" className="flex items-center gap-2.5 group" onClick={playPop}>
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="text-xl font-bold tracking-tight">Financia</span>
+        <Link href="/dashboard" className="flex items-center gap-1 group" onClick={playPop}>
+          <Image 
+            src="/logo.png" 
+            alt="Financia Logo" 
+            width={140}
+            height={140}
+            className="flex-shrink-0 object-contain overflow-visible drop-shadow-[0_0_20px_rgba(124,58,237,0.3)] -ml-4"
+            priority
+          />
+          <span className="text-2xl font-bold tracking-tight -ml-2">Financia</span>
         </Link>
       </div>
 

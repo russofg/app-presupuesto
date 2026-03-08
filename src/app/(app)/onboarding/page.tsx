@@ -22,6 +22,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 const steps = [
   { id: 1, title: "Sobre vos", icon: User },
@@ -88,11 +89,16 @@ export default function OnboardingPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
-          <div className="flex items-center gap-2.5 mb-10">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold tracking-tight">Financia</span>
+          <div className="flex items-center gap-0 mb-8">
+            <Image 
+              src="/logo.png" 
+              alt="Financia Logo" 
+              width={110}
+              height={110}
+              className="object-contain overflow-visible drop-shadow-[0_0_15px_rgba(124,58,237,0.3)] -ml-4"
+              priority
+            />
+            <span className="text-2xl font-bold tracking-tight -ml-1">Financia</span>
           </div>
 
           {/* Progress */}
