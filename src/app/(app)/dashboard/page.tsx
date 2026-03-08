@@ -43,6 +43,7 @@ import { TransactionDialog } from "../transactions/components/transaction-dialog
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { InsightsCard } from "./components/insights-card";
 import { AiCopilot } from "@/components/dashboard/ai-copilot";
+import { MercadoPagoWidget } from "@/components/dashboard/mercadopago-widget";
 import { DollarConverter } from "@/components/dollar-converter";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { generateInsights } from "@/lib/insights";
@@ -353,6 +354,28 @@ export default function DashboardPage() {
           username={settings?.displayName?.split(" ")[0] || "Usuario"}
         />
       </motion.div>
+
+      {/* MercadoPago Widget */}
+      {process.env.NEXT_PUBLIC_MP_ENABLED !== "false" && (
+        <motion.div variants={fadeInUp}>
+          <MercadoPagoWidget
+            onImport={async (movement) => {
+              if (!user) return;
+              await createMutation.mutateAsync({
+                type: movement.type,
+                amount: movement.amount,
+                description: `[MP] ${movement.description}`,
+                date: new Date(movement.date.split("T")[0]),
+                categoryId: "",
+                tags: ["mercadopago"],
+                isRecurring: false,
+                notes: `Importado automáticamente desde MercadoPago. Categoría: ${movement.category}`,
+              });
+              toast.success(`${movement.type === "income" ? "Ingreso" : "Gasto"} importado de MP`);
+            }}
+          />
+        </motion.div>
+      )}
 
       {/* Month Picker */}
       <motion.div variants={fadeInUp}>
