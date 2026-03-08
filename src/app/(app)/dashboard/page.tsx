@@ -355,28 +355,6 @@ export default function DashboardPage() {
         />
       </motion.div>
 
-      {/* MercadoPago Widget */}
-      {process.env.NEXT_PUBLIC_MP_ENABLED !== "false" && (
-        <motion.div variants={fadeInUp}>
-          <MercadoPagoWidget
-            onImport={async (movement) => {
-              if (!user) return;
-              await createMutation.mutateAsync({
-                type: movement.type,
-                amount: movement.amount,
-                description: `[MP] ${movement.description}`,
-                date: new Date(movement.date.split("T")[0]),
-                categoryId: "",
-                tags: ["mercadopago"],
-                isRecurring: false,
-                notes: `Importado automáticamente desde MercadoPago. Categoría: ${movement.category}`,
-              });
-              toast.success(`${movement.type === "income" ? "Ingreso" : "Gasto"} importado de MP`);
-            }}
-          />
-        </motion.div>
-      )}
-
       {/* Month Picker */}
       <motion.div variants={fadeInUp}>
         <MonthPicker month={month} year={year} onChange={(m, y) => { setMonth(m); setYear(y); }} />
@@ -429,6 +407,29 @@ export default function DashboardPage() {
       {transactions && transactions.length > 0 && (
         <motion.div variants={fadeInUp}>
           <QuickAdd transactions={transactions} currency={currency} />
+        </motion.div>
+      )}
+
+      {/* MercadoPago Widget */}
+      {process.env.NEXT_PUBLIC_MP_ENABLED !== "false" && (
+        <motion.div variants={fadeInUp}>
+          <MercadoPagoWidget
+            transactions={transactions ?? []}
+            onImport={async (movement) => {
+              if (!user) return;
+              await createMutation.mutateAsync({
+                type: movement.type,
+                amount: movement.amount,
+                description: `[MP] ${movement.description}`,
+                date: new Date(movement.date.split("T")[0]),
+                categoryId: "",
+                tags: ["mercadopago", `mp:${movement.id}`],
+                isRecurring: false,
+                notes: `Importado automáticamente desde MercadoPago. Categoría: ${movement.category}`,
+              });
+              toast.success(`${movement.type === "income" ? "Ingreso" : "Gasto"} importado de MP`);
+            }}
+          />
         </motion.div>
       )}
 

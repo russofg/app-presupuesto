@@ -15,6 +15,7 @@ import {
   setDoc,
   limit,
   increment,
+  arrayUnion,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { XP_VALUES } from "@/lib/gamification";
@@ -87,6 +88,21 @@ export async function createUserSettings(userId: string, settings: Record<string
 export async function updateUserSettings(userId: string, settings: Partial<UserSettings>): Promise<void> {
   const docRef = doc(db, "settings", userId);
   await updateDoc(docRef, { ...settings, updatedAt: Timestamp.now() });
+}
+
+// ─── MercadoPago imported IDs ────────────────────────────────────────────────
+
+export async function getMpImportedIds(userId: string): Promise<Set<string>> {
+  const docRef = doc(db, "settings", userId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return new Set();
+  const ids: string[] = snap.data()?.mpImportedIds ?? [];
+  return new Set(ids);
+}
+
+export async function addMpImportedId(userId: string, mpId: string): Promise<void> {
+  const docRef = doc(db, "settings", userId);
+  await updateDoc(docRef, { mpImportedIds: arrayUnion(mpId) });
 }
 
 export async function addDeficitCovered(userId: string, month: number, year: number, amount: number): Promise<void> {

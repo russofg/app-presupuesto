@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   const headers = { Authorization: `Bearer ${accessToken}` };
 
   try {
-    // Step 1: Get current user ID (needed for balance user-specific endpoint)
+    // Get current user ID
     const meRes = await fetch(`${MP_API_BASE}/users/me`, { headers });
     if (!meRes.ok) {
       const err = await meRes.text();
@@ -46,31 +46,9 @@ export async function GET(request: Request) {
     const me = await meRes.json();
     const myUserId = String(me.id);
 
-    // Step 2: Fetch balance + payments in parallel (now we have the user ID)
+    // Fetch current-month payments
     const paymentsUrl = `${MP_API_BASE}/v1/payments/search?sort=date_created&criteria=desc&limit=${limit}&begin_date=${beginOfMonth}&end_date=${endOfMonth}`;
-    const [balanceRes, paymentsRes] = await Promise.all([
-      fetch(`${MP_API_BASE}/users/${myUserId}/mercadopago_account/balance`, { headers }),
-      fetch(paymentsUrl, { headers }),
-    ]);
-
-    // Parse balance (try multiple field names)
-    let balance: number | null = null;
-    let balanceCurrency = "ARS";
-    if (balanceRes.ok) {
-      const balData = await balanceRes.json();
-      console.log("[MP Balance]", JSON.stringify(balData).slice(0, 400));
-      balance = balData.available_balance ?? balData.total_amount ?? balData.total ?? null;
-      balanceCurrency = balData.currency_id ?? "ARS";
-    } else {
-      // Fallback to generic endpoint
-      const fallbackRes = await fetch(`${MP_API_BASE}/v1/account/balance`, { headers });
-      if (fallbackRes.ok) {
-        const balData = await fallbackRes.json();
-        console.log("[MP Balance fallback]", JSON.stringify(balData).slice(0, 400));
-        balance = balData.available_balance ?? balData.total ?? null;
-        balanceCurrency = balData.currency_id ?? "ARS";
-      }
-    }
+    const paymentsRes = await fetch(paymentsUrl, { headers });
 
     if (!paymentsRes.ok) {
       const err = await paymentsRes.text();
@@ -106,8 +84,6 @@ export async function GET(request: Request) {
     return NextResponse.json({
       movements,
       total: data.paging?.total ?? movements.length,
-      balance,
-      balanceCurrency,
       month,
     });
   } catch (error) {

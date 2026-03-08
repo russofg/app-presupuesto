@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { 
-  CreditCard, ArrowDownLeft, ArrowUpRight, RefreshCw, 
-  Plus, ChevronDown, ChevronUp, Loader2, AlertCircle, Wallet
+import {
+  ArrowDownLeft, ArrowUpRight, RefreshCw,
+  Plus, ChevronDown, ChevronUp, Loader2, AlertCircle, Wallet, CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import type { Transaction } from "@/types";
 
 interface MpMovement {
   id: string;
@@ -22,8 +24,11 @@ interface MpMovement {
 }
 
 interface MercadoPagoWidgetProps {
+  transactions?: Transaction[];
   onImport?: (movement: MpMovement) => Promise<void>;
 }
+
+const SESSION_KEY = "mp_movements_cache";
 
 function formatAmount(amount: number, currency: string) {
   return new Intl.NumberFormat("es-AR", {
@@ -39,42 +44,72 @@ function formatDate(dateStr: string) {
   return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
+export function MercadoPagoWidget({ transactions = [], onImport }: MercadoPagoWidgetProps) {
+  const { user } = useAuth();
   const [movements, setMovements] = useState<MpMovement[]>([]);
-  const [balance, setBalance] = useState<number | null>(null);
-  const [balanceCurrency, setBalanceCurrency] = useState("ARS");
   const [currentMonth, setCurrentMonth] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
-  const [imported, setImported] = useState<Set<string>>(new Set());
 
-  const fetchMovements = async () => {
-    setLoading(true);
+  // Derive imported set from real transactions — if transaction deleted, checkmark disappears
+  const imported = useMemo(() => {
+    const ids = new Set<string>();
+    for (const tx of transactions) {
+      for (const tag of tx.tags ?? []) {
+        if (tag.startsWith("mp:")) ids.add(tag.slice(3));
+      }
+    }
+    return ids;
+  }, [transactions]);
+
+  const fetchMovements = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/mercadopago/movements?limit=20");
+      const res = await fetch("/api/mercadopago/movements?limit=50");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Error al obtener movimientos");
-      setMovements(data.movements ?? []);
-      if (data.balance !== null && data.balance !== undefined) setBalance(data.balance);
-      if (data.balanceCurrency) setBalanceCurrency(data.balanceCurrency);
-      if (data.month) setCurrentMonth(data.month);
-      setExpanded(true);
+
+      const mvts: MpMovement[] = data.movements ?? [];
+      const month: string = data.month ?? "";
+
+      setMovements(mvts);
+      if (month) setCurrentMonth(month);
+
+      // Persist to sessionStorage so navigation doesn't reset the data
+      try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ movements: mvts, month }));
+      } catch {}
     } catch (e: any) {
-      setError(e.message);
+      if (!silent) setError(e.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, []);
+
+  // On mount: restore from sessionStorage first, then auto-sync in background
+  useEffect(() => {
+    try {
+      const cached = sessionStorage.getItem(SESSION_KEY);
+      if (cached) {
+        const { movements: mvts, month } = JSON.parse(cached);
+        setMovements(mvts ?? []);
+        if (month) setCurrentMonth(month);
+        fetchMovements(true); // silent background refresh
+        return;
+      }
+    } catch {}
+    fetchMovements(false); // first open: show loading spinner
+  }, [fetchMovements]);
 
   const handleImport = async (movement: MpMovement) => {
-    if (!onImport || importing) return;
+    if (!onImport || importing || imported.has(movement.id) || !user?.uid) return;
     setImporting(movement.id);
     try {
       await onImport(movement);
-      setImported(prev => new Set([...prev, movement.id]));
+      // No Firestore ID tracking needed — transaction tags handle this
     } catch (e) {
       console.error("Error importing movement", e);
     } finally {
@@ -99,20 +134,16 @@ export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
           </div>
           <div>
             <h3 className="text-sm font-bold tracking-tight">MercadoPago</h3>
-            {balance !== null ? (
-              <p className="text-xs font-semibold text-[#009ee3]">
-                Saldo: {formatAmount(balance, balanceCurrency)}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">Tus movimientos del mes</p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              {currentMonth ? `Movimientos de ${currentMonth}` : "Tus movimientos del mes"}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Button
             size="sm"
             variant="outline"
-            onClick={fetchMovements}
+            onClick={() => fetchMovements(false)}
             disabled={loading}
             className="h-8 px-3 text-xs gap-1.5 border-[#009ee3]/30 text-[#009ee3] hover:bg-[#009ee3]/10"
           >
@@ -121,7 +152,7 @@ export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
             ) : (
               <RefreshCw className="w-3.5 h-3.5" />
             )}
-            {movements.length > 0 ? "Actualizar" : "Sincronizar"}
+            {loading ? "Sincronizando..." : "Actualizar"}
           </Button>
           {movements.length > 0 && (
             <button
@@ -212,7 +243,7 @@ export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
                     </div>
                   </div>
 
-                  {/* Amount + Import */}
+                  {/* Amount + Import button */}
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={cn(
                       "text-sm font-bold",
@@ -234,7 +265,9 @@ export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
                       >
                         {importing === m.id
                           ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          : <Plus className="w-3.5 h-3.5" />
+                          : alreadyImported
+                            ? <CheckCircle2 className="w-3.5 h-3.5" />
+                            : <Plus className="w-3.5 h-3.5" />
                         }
                       </button>
                     )}
@@ -246,13 +279,11 @@ export function MercadoPagoWidget({ onImport }: MercadoPagoWidgetProps) {
         )}
       </AnimatePresence>
 
-      {/* Empty CTA */}
-      {movements.length === 0 && !loading && !error && (
-        <div className="px-5 pb-5 flex flex-col items-center text-center gap-2">
-          <CreditCard className="w-8 h-8 text-muted-foreground/40" />
-          <p className="text-xs text-muted-foreground">
-            Tocá Sincronizar para importar tus movimientos de MercadoPago
-          </p>
+      {/* Loading state on first open */}
+      {loading && movements.length === 0 && (
+        <div className="px-5 pb-5 flex flex-col items-center gap-2">
+          <Loader2 className="w-6 h-6 text-[#009ee3] animate-spin" />
+          <p className="text-xs text-muted-foreground">Sincronizando con MercadoPago...</p>
         </div>
       )}
     </motion.div>
