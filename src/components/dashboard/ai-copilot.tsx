@@ -14,30 +14,39 @@ export function AiCopilot({ totalIncome, totalExpenses, username }: AiCopilotPro
   const [insight, setInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
+  const MAX_DAILY_CALLS = 10;
 
   useEffect(() => {
     async function fetchInsight() {
-      // Clave única por usuario + mes para limpiar el cache automáticamente cada mes
-      const now = new Date();
-      const cacheKey = `ai_insight_${username}_${now.getFullYear()}_${now.getMonth()}`;
+      const SESSION_KEY = `ai_insight_session_${username}`;
+      const today = new Date().toISOString().split("T")[0]; // "2025-03-07"
+      const COUNTER_KEY = `ai_calls_${username}_${today}`;
 
-      // Intentar reutilizar el cache antes de llamar a la API
+      // 1. Si ya hay un consejo para esta sesión (mismo tab abierto), úsalo directamente
       try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const { text, timestamp } = JSON.parse(cached);
-          if (Date.now() - timestamp < CACHE_TTL_MS) {
-            setInsight(text);
-            setLoading(false);
-            return; // ← salimos sin llamar a la API
-          }
+        const sessionCached = sessionStorage.getItem(SESSION_KEY);
+        if (sessionCached) {
+          setInsight(sessionCached);
+          setLoading(false);
+          return;
         }
-      } catch {
-        // Si el localStorage falla (por ejemplo, en modo privado) ignoramos y seguimos
-      }
+      } catch { /* ignorar */ }
 
-      // No había cache válido → llamamos a la API
+      // 2. Verificar si llegamos al límite diario
+      try {
+        const callCount = parseInt(localStorage.getItem(COUNTER_KEY) ?? "0", 10);
+        if (callCount >= MAX_DAILY_CALLS) {
+          // Límite alcanzado: reutilizar último consejo guardado si existe
+          const lastInsight = localStorage.getItem(`ai_last_insight_${username}`);
+          if (lastInsight) {
+            setInsight(lastInsight);
+          }
+          setLoading(false);
+          return;
+        }
+      } catch { /* ignorar */ }
+
+      // 3. Llamar a la API
       try {
         const response = await fetch("/api/insights", {
           method: "POST",
@@ -48,10 +57,15 @@ export function AiCopilot({ totalIncome, totalExpenses, username }: AiCopilotPro
         if (data.insight) {
           const cleanText = data.insight.replace(/[\*\_]/g, "");
           setInsight(cleanText);
-          // Guardar en cache
+
+          // Guardar en sessionStorage (para esta sesión) y como "último consejo"
           try {
-            localStorage.setItem(cacheKey, JSON.stringify({ text: cleanText, timestamp: Date.now() }));
-          } catch { /* ignorar errores de cuota de localStorage */ }
+            sessionStorage.setItem(SESSION_KEY, cleanText);
+            localStorage.setItem(`ai_last_insight_${username}`, cleanText);
+            // Incrementar contador diario
+            const prev = parseInt(localStorage.getItem(COUNTER_KEY) ?? "0", 10);
+            localStorage.setItem(COUNTER_KEY, String(prev + 1));
+          } catch { /* ignorar */ }
         }
       } catch (error) {
         console.error("AI Copilot request failed", error);
