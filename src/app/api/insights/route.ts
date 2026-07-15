@@ -9,7 +9,11 @@ export async function POST(request: Request) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: "No autorizado" }, { status: err.status });
     }
-    return NextResponse.json({ error: "Auth no configurada" }, { status: 500 });
+    console.error("[insights] auth/init error:", err);
+    return NextResponse.json(
+      { error: "Auth no configurada", detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
   }
 
   try {
