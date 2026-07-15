@@ -1,60 +1,27 @@
-import { readFileSync } from "fs";
+import type { JWTVerifyGetKey } from "jose";
 
 /**
- * Firebase Admin SDK — server-only.
+ * Verificación de Firebase ID tokens SIN el Admin SDK.
  *
- * Required env vars:
- * - FIREBASE_SERVICE_ACCOUNT_KEY: las credenciales de la service account, como
- *   JSON crudo, ruta a un archivo .json (dev local) o JSON en base64 (prod).
- * - OWNER_UID (opcional): si está seteado, solo ese uid pasa `verifyRequestAuth`.
+ * Para VERIFICAR un ID token solo hacen falta las claves PÚBLICAS de Google (no
+ * la service account). Usamos `jose` con import dinámico para evitar el
+ * ERR_REQUIRE_ESM que tira firebase-admin en el serverless de Netlify.
  *
- * `firebase-admin` se importa DINÁMICAMENTE dentro de la función (no en el scope
- * del módulo) para que la carga del módulo nunca crashee en entornos serverless
- * como Netlify. Si el import o la credencial fallan, el error se propaga y el
- * handler responde con JSON, no con un 500 de texto plano.
+ * Env:
+ * - NEXT_PUBLIC_FIREBASE_PROJECT_ID: para validar issuer/audience del token.
+ * - OWNER_UID (opcional): si está seteado, solo ese uid pasa.
  */
 
-function parseServiceAccount(raw: string): Record<string, unknown> | null {
-  const tryJson = (s: string): Record<string, unknown> | null => {
-    try {
-      return JSON.parse(s);
-    } catch {
-      return null;
-    }
-  };
-  const tryFile = (p: string): Record<string, unknown> | null => {
-    try {
-      return tryJson(readFileSync(p.trim(), "utf8"));
-    } catch {
-      return null;
-    }
-  };
-  return (
-    tryJson(raw) ??
-    (raw.trim().endsWith(".json") ? tryFile(raw) : null) ??
-    tryJson(Buffer.from(raw, "base64").toString("utf8"))
-  );
-}
+const FIREBASE_JWKS_URL =
+  "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 
-async function getAdminAuth() {
-  const { initializeApp, getApps, cert } = await import("firebase-admin/app");
-  const { getAuth } = await import("firebase-admin/auth");
+let jwksCache: JWTVerifyGetKey | null = null;
 
-  const existing = getApps();
-  if (existing.length > 0) return getAuth(existing[0]);
-
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!raw) throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY no configurada");
-
-  const serviceAccount = parseServiceAccount(raw);
-  if (!serviceAccount) {
-    throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY no es JSON, ruta .json ni base64 válido");
-  }
-
-  const app = initializeApp({
-    credential: cert(serviceAccount as Parameters<typeof cert>[0]),
-  });
-  return getAuth(app);
+async function getJwks(): Promise<JWTVerifyGetKey> {
+  if (jwksCache) return jwksCache;
+  const { createRemoteJWKSet } = await import("jose");
+  jwksCache = createRemoteJWKSet(new URL(FIREBASE_JWKS_URL));
+  return jwksCache;
 }
 
 /**
@@ -70,11 +37,11 @@ export class AuthError extends Error {
 }
 
 /**
- * Verifica el header `Authorization: Bearer <idToken>` de la request.
+ * Verifica el header `Authorization: Bearer <idToken>`.
  * - Falta/malformado → AuthError(401)
- * - Token inválido → AuthError(401)
+ * - Token inválido/expirado/firma mala → AuthError(401)
  * - OWNER_UID seteado y uid distinto → AuthError(403)
- * Fallas de config (service account) se propagan como Error genérico (500).
+ * Config faltante (project id) → Error genérico (500).
  */
 export async function verifyRequestAuth(request: Request): Promise<string> {
   const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
@@ -86,18 +53,26 @@ export async function verifyRequestAuth(request: Request): Promise<string> {
     throw new AuthError("Falta el token de autenticación", 401);
   }
 
-  // Cargar/inicializar el Admin SDK: si falla (import o credencial), propagamos
-  // el Error genérico para que la ruta responda 500 con JSON diagnosticable.
-  const auth = await getAdminAuth();
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  if (!projectId) {
+    throw new Error("NEXT_PUBLIC_FIREBASE_PROJECT_ID no configurada");
+  }
 
-  // Verificar el token: acá sí, un fallo es token inválido → 401.
-  let uid: string;
+  const { jwtVerify } = await import("jose");
+  const jwks = await getJwks();
+
+  let uid: string | undefined;
   try {
-    const decoded = await auth.verifyIdToken(token);
-    uid = decoded.uid;
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: `https://securetoken.google.com/${projectId}`,
+      audience: projectId,
+    });
+    uid = payload.sub;
   } catch {
     throw new AuthError("Token inválido", 401);
   }
+
+  if (!uid) throw new AuthError("Token inválido", 401);
 
   const ownerUid = process.env.OWNER_UID;
   if (ownerUid && uid !== ownerUid) {
