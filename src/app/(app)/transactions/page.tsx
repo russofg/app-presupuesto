@@ -39,7 +39,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDeleteTransaction, useCreateTransaction } from "@/hooks/use-transactions";
 import { useUISounds } from "@/hooks/use-ui-sounds";
-import type { Transaction } from "@/types";
+import { paymentMethodLabels, type Transaction } from "@/types";
 
 export default function TransactionsPage() {
   const { settings } = useAuth();
@@ -252,6 +252,7 @@ export default function TransactionsPage() {
                           </div>
                           <p className="text-xs text-muted-foreground">
                             {cat?.name || "Sin categoría"}
+                            {tx.paymentMethod && ` · ${paymentMethodLabels[tx.paymentMethod]}`}
                           </p>
                         </div>
                         <span
