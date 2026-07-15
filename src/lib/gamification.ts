@@ -19,7 +19,10 @@ export const LEVELS: LevelDef[] = [
   { name: "Leyenda", minXP: 5000, icon: "🏆", color: "#ec4899" },
 ];
 
-export function getLevel(xp: number) {
+export function getLevel(rawXp: number) {
+  // El XP nunca debería ser negativo, pero borrar más de lo creado puede llevarlo
+  // por debajo de 0 (increment(-X) no tiene piso). Lo acotamos para no romper la barra.
+  const xp = Math.max(0, rawXp);
   let level = LEVELS[0];
   for (const l of LEVELS) {
     if (xp >= l.minXP) level = l;

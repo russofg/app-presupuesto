@@ -259,9 +259,9 @@ export async function createTransaction(userId: string, input: CreateTransaction
   });
 
   const settingsRef = doc(db, "settings", userId);
-  batch.update(settingsRef, {
+  batch.set(settingsRef, {
     totalXP: increment(XP_VALUES.transaction)
-  });
+  }, { merge: true });
 
   await batch.commit();
   return docRef.id;
@@ -279,9 +279,9 @@ export async function deleteTransaction(id: string, userId?: string): Promise<vo
   
   if (userId) {
     const settingsRef = doc(db, "settings", userId);
-    batch.update(settingsRef, {
+    batch.set(settingsRef, {
       totalXP: increment(-XP_VALUES.transaction)
-    });
+    }, { merge: true });
   }
   
   await batch.commit();
@@ -313,9 +313,9 @@ export async function createBudget(userId: string, input: CreateBudgetInput): Pr
   });
 
   const settingsRef = doc(db, "settings", userId);
-  batch.update(settingsRef, {
+  batch.set(settingsRef, {
     totalXP: increment(XP_VALUES.budget)
-  });
+  }, { merge: true });
 
   await batch.commit();
   return docRef.id;
@@ -331,9 +331,9 @@ export async function deleteBudget(id: string, userId?: string): Promise<void> {
 
   if (userId) {
     const settingsRef = doc(db, "settings", userId);
-    batch.update(settingsRef, {
+    batch.set(settingsRef, {
       totalXP: increment(-XP_VALUES.budget)
-    });
+    }, { merge: true });
   }
 
   await batch.commit();
@@ -361,9 +361,9 @@ export async function createSavingsGoal(userId: string, input: CreateSavingsGoal
   });
 
   const settingsRef = doc(db, "settings", userId);
-  batch.update(settingsRef, {
+  batch.set(settingsRef, {
     totalXP: increment(XP_VALUES.goal)
-  });
+  }, { merge: true });
 
   await batch.commit();
   return docRef.id;
@@ -381,9 +381,9 @@ export async function deleteSavingsGoal(id: string, userId?: string): Promise<vo
 
   if (userId) {
     const settingsRef = doc(db, "settings", userId);
-    batch.update(settingsRef, {
+    batch.set(settingsRef, {
       totalXP: increment(-XP_VALUES.goal)
-    });
+    }, { merge: true });
   }
 
   await batch.commit();
