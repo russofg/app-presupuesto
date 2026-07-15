@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // firebase-admin no se bundlea bien en el serverless de Netlify; hay que
+  // dejarlo como paquete externo para que se resuelva en runtime.
+  serverExternalPackages: ["firebase-admin"],
   async headers() {
     return [
       {

@@ -59,6 +59,7 @@ export function AiCopilot({ totalIncome, totalExpenses, username }: AiCopilotPro
           },
           body: JSON.stringify({ totalIncome, totalExpenses, username }),
         });
+        if (!response.ok) return; // API no disponible; finally resetea loading
         const data = await response.json();
         if (data.insight) {
           const cleanText = data.insight.replace(/[\*\_]/g, "");
