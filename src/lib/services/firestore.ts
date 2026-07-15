@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   Timestamp,
+  type QueryConstraint,
   writeBatch,
   setDoc,
   limit,
@@ -35,12 +36,6 @@ import type {
 import { defaultCategories } from "@/types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function toDate(timestamp: unknown): Date {
-  if (timestamp instanceof Timestamp) return timestamp.toDate();
-  if (timestamp instanceof Date) return timestamp;
-  return new Date(timestamp as string);
-}
 
 function serializeDoc<T>(doc: { id: string; data: () => Record<string, unknown> }): T {
   const data = doc.data();
@@ -209,27 +204,40 @@ export async function initializeDefaultCategories(userId: string): Promise<void>
 
 export async function getTransactions(
   userId: string,
-  filters?: { month?: number; year?: number; type?: string; categoryId?: string }
+  filters?: { month?: number; year?: number; type?: string; categoryId?: string; from?: Date }
 ): Promise<Transaction[]> {
-  let q = query(collection(db, "transactions"), where("userId", "==", userId), orderBy("date", "desc"));
+  const constraints: QueryConstraint[] = [where("userId", "==", userId)];
 
   if (filters?.type) {
-    q = query(collection(db, "transactions"), where("userId", "==", userId), where("type", "==", filters.type), orderBy("date", "desc"));
+    constraints.push(where("type", "==", filters.type));
   }
 
-  if (filters?.month === undefined || filters?.year === undefined) {
-    q = query(q, limit(300));
+  // When a month/year is given, let Firestore filter by date range instead of
+  // pulling the whole collection and filtering client-side. `from` bounds an
+  // open-ended history window (e.g. last 12 months for reports).
+  const month = filters?.month;
+  const year = filters?.year;
+  const hasMonthRange = month !== undefined && year !== undefined;
+
+  if (hasMonthRange) {
+    const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    const end = new Date(year, month, 1, 0, 0, 0, 0); // first day of next month
+    constraints.push(where("date", ">=", Timestamp.fromDate(start)));
+    constraints.push(where("date", "<", Timestamp.fromDate(end)));
+  } else if (filters?.from) {
+    constraints.push(where("date", ">=", Timestamp.fromDate(filters.from)));
   }
 
+  constraints.push(orderBy("date", "desc"));
+
+  // Only cap the fully-unbounded query; month range and `from` are already bounded.
+  if (!hasMonthRange && !filters?.from) {
+    constraints.push(limit(300));
+  }
+
+  const q = query(collection(db, "transactions"), ...constraints);
   const snap = await getDocs(q);
   let transactions = snap.docs.map((d) => serializeDoc<Transaction>({ id: d.id, data: () => d.data() }));
-
-  if (filters?.month !== undefined && filters?.year !== undefined) {
-    transactions = transactions.filter((t) => {
-      const d = toDate(t.date);
-      return d.getMonth() + 1 === filters.month && d.getFullYear() === filters.year;
-    });
-  }
 
   if (filters?.categoryId) {
     transactions = transactions.filter((t) => t.categoryId === filters.categoryId);

@@ -16,6 +16,7 @@ export function useTransactions(filters?: {
   year?: number;
   type?: string;
   categoryId?: string;
+  from?: Date;
 }) {
   const { user } = useAuth();
 

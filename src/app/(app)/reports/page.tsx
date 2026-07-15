@@ -57,8 +57,11 @@ export default function ReportsPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
+  // History window for the multi-month charts (they show the last 12 months) and
+  // for the previous-month comparison — bounded by date instead of the last 300.
+  const historyFrom = useMemo(() => new Date(year, month - 13, 1), [month, year]);
   const { data: monthTransactions, isLoading: loadingMonth } = useTransactions({ month, year });
-  const { data: allTransactions, isLoading: loadingAll } = useTransactions();
+  const { data: allTransactions, isLoading: loadingAll } = useTransactions({ from: historyFrom });
   const { data: categories, isLoading: loadingCat } = useCategories();
   const { data: budgets } = useBudgets(month, year);
 
