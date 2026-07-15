@@ -437,6 +437,47 @@ function getNextRecurringDate(current: Date, frequency: string): Date {
   return next;
 }
 
+/**
+ * Genera la transacción de una ocurrencia recurrente usando un ID determinístico
+ * (`reglaId_YYYYMMDD`). Al ser determinístico, dos ejecuciones simultáneas (dos
+ * pestañas/dispositivos) o un reintento apuntan al MISMO documento en vez de crear
+ * un duplicado. Devuelve true solo si realmente creó una ocurrencia nueva.
+ */
+async function createRecurringOccurrence(
+  userId: string,
+  rule: RecurringTransaction,
+  date: Date
+): Promise<boolean> {
+  const dateKey = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
+  const docId = `${rule.id}_${dateKey}`;
+  const docRef = doc(db, "transactions", docId);
+
+  // Si ya existe, no reescribimos ni volvemos a sumar XP: es la garantía de idempotencia.
+  const existing = await getDoc(docRef);
+  if (existing.exists()) return false;
+
+  const batch = writeBatch(db);
+  batch.set(docRef, {
+    userId,
+    type: rule.type,
+    amount: rule.amount,
+    description: rule.description,
+    categoryId: rule.categoryId,
+    date: Timestamp.fromDate(date),
+    tags: ["recurrente"],
+    isRecurring: true,
+    recurringId: rule.id,
+    notes: "",
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now(),
+  });
+  batch.set(doc(db, "settings", userId), {
+    totalXP: increment(XP_VALUES.transaction),
+  }, { merge: true });
+  await batch.commit();
+  return true;
+}
+
 export async function processRecurringTransactions(userId: string): Promise<number> {
   const recurring = await getRecurringTransactions(userId);
   const now = new Date();
@@ -446,17 +487,8 @@ export async function processRecurringTransactions(userId: string): Promise<numb
     let nextDate = new Date(rule.nextDate);
 
     while (nextDate <= now) {
-      await createTransaction(userId, {
-        type: rule.type,
-        amount: rule.amount,
-        description: rule.description,
-        categoryId: rule.categoryId,
-        date: nextDate,
-        tags: ["recurrente"],
-        isRecurring: true,
-        recurringId: rule.id,
-      });
-      created++;
+      const wasCreated = await createRecurringOccurrence(userId, rule, nextDate);
+      if (wasCreated) created++;
       nextDate = getNextRecurringDate(nextDate, rule.frequency);
     }
 
