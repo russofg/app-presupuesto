@@ -42,8 +42,9 @@ import { MonthlyWrap } from "./components/monthly-wrap";
 import { TransactionDialog } from "../transactions/components/transaction-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { InsightsCard } from "./components/insights-card";
+import { CoverDeficitCard } from "./components/cover-deficit-card";
+import { RefundExcessCard } from "./components/refund-excess-card";
 import { AiCopilot } from "@/components/dashboard/ai-copilot";
-import { MercadoPagoWidget } from "@/components/dashboard/mercadopago-widget";
 import { DollarConverter } from "@/components/dollar-converter";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { generateInsights } from "@/lib/insights";
@@ -136,6 +137,12 @@ export default function DashboardPage() {
     return { income, expenses, balance, savings, deficit };
   }, [transactions, goals]);
 
+  // Cuánto de este mes ya se cubrió retirando de metas (guardado en settings).
+  const deficitCovered = useMemo(() => {
+    const map = (settings as { deficitCoveredByMonth?: Record<string, number> } | null)?.deficitCoveredByMonth ?? {};
+    return map[`${year}-${month}`] ?? 0;
+  }, [settings, month, year]);
+
   const prevMetrics = useMemo(() => {
     if (!prevTransactions) return { income: 0, expenses: 0, balance: 0, savings: 0 };
     const real = filterRealTransactions(prevTransactions);
@@ -221,7 +228,7 @@ export default function DashboardPage() {
     });
   }, [metrics, budgetsWithSpent, goals]);
 
-  const totalXP = settings?.totalXP ?? 0;
+  const totalXP = Math.max(0, settings?.totalXP ?? 0);
   const level = useMemo(() => getLevel(totalXP), [totalXP]);
 
   const achievements = useMemo(() => {
@@ -393,43 +400,40 @@ export default function DashboardPage() {
         <MetricCard
           title="En metas"
           value={metrics.savings}
-          previousValue={prevTransactions ? prevMetrics.savings : undefined}
           currency={currency}
           icon={PiggyBank}
-          trend={metrics.savings >= 0 ? "positive" : "negative"}
+          trend="neutral"
           color="primary"
-          subtitle="De lo que ingresaste, asignado a metas"
+          subtitle="Total acumulado en tus metas"
+          trendLabel="en total"
         />
       </motion.div>
 
+
+      {/* Cubrir déficit / devolver exceso (se auto-ocultan si no aplican) */}
+      <CoverDeficitCard
+        deficit={metrics.deficit}
+        deficitCovered={deficitCovered}
+        savings={metrics.savings}
+        goals={goals ?? []}
+        currency={currency}
+        month={month}
+        year={year}
+      />
+      <RefundExcessCard
+        deficit={metrics.deficit}
+        deficitCovered={deficitCovered}
+        goals={goals ?? []}
+        currency={currency}
+        month={month}
+        year={year}
+        onRefunded={() => queryClient.invalidateQueries({ queryKey: ["goals"] })}
+      />
 
       {/* Quick Add */}
       {transactions && transactions.length > 0 && (
         <motion.div variants={fadeInUp}>
           <QuickAdd transactions={transactions} currency={currency} />
-        </motion.div>
-      )}
-
-      {/* MercadoPago Widget */}
-      {process.env.NEXT_PUBLIC_MP_ENABLED !== "false" && (
-        <motion.div variants={fadeInUp}>
-          <MercadoPagoWidget
-            transactions={transactions ?? []}
-            onImport={async (movement) => {
-              if (!user) return;
-              await createMutation.mutateAsync({
-                type: movement.type,
-                amount: movement.amount,
-                description: `[MP] ${movement.description}`,
-                date: new Date(movement.date.split("T")[0]),
-                categoryId: "",
-                tags: ["mercadopago", `mp:${movement.id}`],
-                isRecurring: false,
-                notes: `Importado automáticamente desde MercadoPago. Categoría: ${movement.category}`,
-              });
-              toast.success(`${movement.type === "income" ? "Ingreso" : "Gasto"} importado de MP`);
-            }}
-          />
         </motion.div>
       )}
 
@@ -485,6 +489,7 @@ export default function DashboardPage() {
             dayOfMonth={now.getDate()}
             daysInMonth={new Date(year, month, 0).getDate()}
             currency={currency}
+            isCurrentMonth={month === now.getMonth() + 1 && year === now.getFullYear()}
           />
         </motion.div>
         <motion.div variants={fadeInUp}>

@@ -15,6 +15,9 @@ interface ProjectionsCardProps {
   dayOfMonth: number;
   daysInMonth: number;
   currency: Currency;
+  // Proyectar solo tiene sentido para el mes en curso. Para un mes ya cerrado
+  // mostramos los valores reales, no una extrapolación (que inflaría el gasto).
+  isCurrentMonth: boolean;
 }
 
 export function ProjectionsCard({
@@ -26,15 +29,21 @@ export function ProjectionsCard({
   dayOfMonth,
   daysInMonth,
   currency,
+  isCurrentMonth,
 }: ProjectionsCardProps) {
   const progress = dayOfMonth / daysInMonth;
+  const displayProgress = isCurrentMonth ? progress : 1;
 
   // Income: use previous month as reference (salary is stable),
-  // unless current month already exceeds it
-  const expectedIncome = prevIncome > 0 ? Math.max(prevIncome, income) : income;
+  // unless current month already exceeds it. Past months use their real income.
+  const expectedIncome = isCurrentMonth
+    ? (prevIncome > 0 ? Math.max(prevIncome, income) : income)
+    : income;
 
-  // Expenses: linear projection makes sense since spending is distributed
-  const projectedExpenses = progress > 0.05 ? expenses / progress : (prevExpenses > 0 ? prevExpenses : expenses);
+  // Expenses: linear projection for the current month; real total for past months.
+  const projectedExpenses = isCurrentMonth
+    ? (progress > 0.05 ? expenses / progress : (prevExpenses > 0 ? prevExpenses : expenses))
+    : expenses;
 
   const projectedSavings = expectedIncome - projectedExpenses;
   const monthsToGoal = projectedSavings > 0 && savingsRemaining > 0
@@ -43,23 +52,25 @@ export function ProjectionsCard({
 
   const projections = [
     {
-      label: "Ingreso esperado",
+      label: isCurrentMonth ? "Ingreso esperado" : "Ingreso del mes",
       value: expectedIncome,
       icon: TrendingUp,
       color: "text-emerald-500",
       bgColor: "bg-emerald-500/10",
-      detail: prevIncome > 0 ? "basado en mes anterior" : null,
+      detail: isCurrentMonth && prevIncome > 0 ? "basado en mes anterior" : null,
     },
     {
-      label: "Gasto proyectado",
+      label: isCurrentMonth ? "Gasto proyectado" : "Gasto del mes",
       value: projectedExpenses,
       icon: Calendar,
       color: "text-rose-500",
       bgColor: "bg-rose-500/10",
-      detail: progress > 0.05 ? "al ritmo actual" : (prevExpenses > 0 ? "basado en mes anterior" : null),
+      detail: isCurrentMonth
+        ? (progress > 0.05 ? "al ritmo actual" : (prevExpenses > 0 ? "basado en mes anterior" : null))
+        : null,
     },
     {
-      label: "Saldo estimado",
+      label: isCurrentMonth ? "Saldo estimado" : "Saldo del mes",
       value: projectedSavings,
       icon: Target,
       color: projectedSavings >= 0 ? "text-violet-500" : "text-rose-500",
@@ -73,10 +84,10 @@ export function ProjectionsCard({
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-amber-500" />
-          Proyecciones del mes
+          {isCurrentMonth ? "Proyecciones del mes" : "Resumen del mes"}
         </h3>
         <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
-          Día {dayOfMonth} de {daysInMonth}
+          {isCurrentMonth ? `Día ${dayOfMonth} de ${daysInMonth}` : "Mes completo"}
         </span>
       </div>
 
@@ -84,7 +95,7 @@ export function ProjectionsCard({
         <motion.div
           className="h-full bg-linear-to-r from-primary/70 to-primary rounded-full"
           initial={{ width: 0 }}
-          animate={{ width: `${progress * 100}%` }}
+          animate={{ width: `${displayProgress * 100}%` }}
           transition={{ duration: 1, ease: "easeOut" }}
         />
       </div>
@@ -110,7 +121,7 @@ export function ProjectionsCard({
         ))}
       </div>
 
-      {monthsToGoal !== null && monthsToGoal > 0 && monthsToGoal < 120 && (
+      {isCurrentMonth && monthsToGoal !== null && monthsToGoal > 0 && monthsToGoal < 120 && (
         <div className="pt-3 border-t border-border/50">
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             <span className="text-foreground font-medium">💡 Insight:</span>{" "}
@@ -126,7 +137,7 @@ export function ProjectionsCard({
         <div className="pt-3 border-t border-border/50">
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             <span className="text-rose-500 font-medium">⚠️ Atención:</span>{" "}
-            Al ritmo actual, este mes terminarías con un déficit de{" "}
+            {isCurrentMonth ? "Al ritmo actual, este mes terminarías con un déficit de" : "Este mes cerró con un déficit de"}{" "}
             <span className="font-semibold text-rose-500">
               {formatCurrency(Math.abs(projectedSavings), currency)}
             </span>.

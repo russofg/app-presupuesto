@@ -17,6 +17,7 @@ interface MetricCardProps {
   trend: "positive" | "negative" | "neutral";
   color?: "success" | "destructive" | "primary" | "default";
   subtitle?: string;
+  trendLabel?: string;
 }
 
 const colorConfig = {
@@ -58,6 +59,7 @@ export function MetricCard({
   trend,
   color = "default",
   subtitle,
+  trendLabel = "este mes",
 }: MetricCardProps) {
   const config = colorConfig[color];
   const change = getChangeInfo(value, previousValue);
@@ -157,7 +159,7 @@ export function MetricCard({
                   trend === "positive" ? "text-emerald-500" : trend === "negative" ? "text-rose-500" : "text-muted-foreground"
                 )}
               >
-                este mes
+                {trendLabel}
               </span>
             </>
           )}
