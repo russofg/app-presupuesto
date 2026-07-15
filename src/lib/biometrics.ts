@@ -78,6 +78,41 @@ export async function registerLocalBiometrics(username: string): Promise<string 
   }
 }
 
+// ─── Credencial biométrica POR-DISPOSITIVO ──────────────────────────────────
+// Touch ID / Face ID están atados al hardware del dispositivo, así que la
+// credencial se guarda en localStorage (local a este aparato), NO en Firestore.
+// Cada dispositivo decide por su cuenta si usa biometría: la Mac sin credencial
+// entra directo con la sesión; el celu con credencial pide la huella.
+
+const DEVICE_CRED_KEY = "financia_bio_cred_";
+
+export function getDeviceCredentialId(uid: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(DEVICE_CRED_KEY + uid);
+  } catch {
+    return null;
+  }
+}
+
+export function setDeviceCredentialId(uid: string, credId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(DEVICE_CRED_KEY + uid, credId);
+  } catch {
+    /* localStorage no disponible */
+  }
+}
+
+export function clearDeviceCredentialId(uid: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(DEVICE_CRED_KEY + uid);
+  } catch {
+    /* localStorage no disponible */
+  }
+}
+
 export async function verifyLocalBiometrics(credentialIdBase64: string): Promise<boolean> {
   try {
     const challenge = generateRandomBuffer(32);

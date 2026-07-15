@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { staggerContainer, fadeInUp } from "@/lib/motion";
 import { useTheme } from "next-themes";
@@ -95,6 +95,15 @@ export default function SettingsPage() {
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
+
+  // Estado de biometría POR-DISPOSITIVO (vive en localStorage, no en Firestore).
+  const [deviceBiometric, setDeviceBiometric] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    import("@/lib/biometrics").then(({ getDeviceCredentialId }) => {
+      setDeviceBiometric(!!getDeviceCredentialId(user.uid));
+    });
+  }, [user]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -536,16 +545,16 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Bloqueo con Biometría (Passkey)</p>
-              <p className="text-xs text-muted-foreground">Requerir huella o rostro al abrir la app.</p>
+              <p className="text-xs text-muted-foreground">Requerir huella o rostro al abrir la app en <span className="font-medium">este dispositivo</span>.</p>
             </div>
             <div className="flex items-center gap-3">
-              <Switch 
-                checked={!!(settings as any)?.biometricEnabled} 
+              <Switch
+                checked={deviceBiometric}
                 onCheckedChange={async (checked) => {
                   if (!user) return;
+                  const { isBiometricsSupported, registerLocalBiometrics, setDeviceCredentialId, clearDeviceCredentialId } = await import("@/lib/biometrics");
                   if (checked) {
                     try {
-                      const { isBiometricsSupported, registerLocalBiometrics } = await import("@/lib/biometrics");
                       const supported = await isBiometricsSupported();
                       if (!supported) {
                         toast.error("Tu dispositivo o navegador no soporta biometría nativa.");
@@ -553,9 +562,9 @@ export default function SettingsPage() {
                       }
                       const credId = await registerLocalBiometrics(user.email || "Usuario Financia");
                       if (credId) {
-                        await updateUserSettings(user.uid, { biometricEnabled: true, biometricCredentialId: credId });
-                        await refreshSettings();
-                        toast.success("Biometría configurada correctamente.");
+                        setDeviceCredentialId(user.uid, credId);
+                        setDeviceBiometric(true);
+                        toast.success("Biometría configurada en este dispositivo.");
                       } else {
                         toast.error("Se canceló el registro biométrico.");
                       }
@@ -563,11 +572,11 @@ export default function SettingsPage() {
                       toast.error("Falló la configuración biométrica.");
                     }
                   } else {
-                    await updateUserSettings(user.uid, { biometricEnabled: false, biometricCredentialId: null });
-                    await refreshSettings();
-                    toast.success("Bloqueo biométrico desactivado.");
+                    clearDeviceCredentialId(user.uid);
+                    setDeviceBiometric(false);
+                    toast.success("Bloqueo biométrico desactivado en este dispositivo.");
                   }
-                }} 
+                }}
               />
             </div>
           </div>

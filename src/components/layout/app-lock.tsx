@@ -4,22 +4,35 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { verifyLocalBiometrics } from "@/lib/biometrics";
+import { verifyLocalBiometrics, getDeviceCredentialId, clearDeviceCredentialId } from "@/lib/biometrics";
 import { Fingerprint, Lock, ShieldCheck, AlertTriangle, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type LockError = "no_credential" | "generic" | null;
 
 export function AppLock({ children }: { children: React.ReactNode }) {
-  const { user, settings, loading } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
-  
+
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [lockError, setLockError] = useState<LockError>(null);
+  const [credentialId, setCredentialId] = useState<string | null>(null);
 
-  const biometricEnabled = (settings as any)?.biometricEnabled === true;
-  const credentialId = (settings as any)?.biometricCredentialId as string | undefined;
+  // La biometría es POR-DISPOSITIVO: solo bloqueamos si ESTE aparato registró su
+  // propia credencial en localStorage. Un dispositivo sin credencial (ej: la Mac)
+  // entra directo con la sesión persistente.
+  useEffect(() => {
+    setCredentialId(user ? getDeviceCredentialId(user.uid) : null);
+  }, [user]);
+
+  const skipBiometrics = () => {
+    // Ya estás autenticado (sesión de Firebase); el lock es solo una capa extra
+    // en este dispositivo, así que permitimos continuar sin quedar afuera.
+    if (user) clearDeviceCredentialId(user.uid);
+    setCredentialId(null);
+    setIsUnlocked(true);
+  };
 
   const handleUnlock = async () => {
     if (!credentialId) return;
@@ -30,13 +43,14 @@ export function AppLock({ children }: { children: React.ReactNode }) {
       if (success) {
         setIsUnlocked(true);
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error("Fallo al verificar biometría", e);
       // NotAllowedError suele significar que no hay ninguna llave registrada en este dispositivo/dominio
+      const err = e as { name?: string; message?: string };
       const isNoCredential =
-        e?.name === "NotAllowedError" ||
-        e?.name === "InvalidStateError" ||
-        (typeof e?.message === "string" && e.message.toLowerCase().includes("no credentials"));
+        err?.name === "NotAllowedError" ||
+        err?.name === "InvalidStateError" ||
+        (typeof err?.message === "string" && err.message.toLowerCase().includes("no credentials"));
       setLockError(isNoCredential ? "no_credential" : "generic");
     } finally {
       setIsVerifying(false);
@@ -44,16 +58,16 @@ export function AppLock({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    if (!loading && user && biometricEnabled && !isUnlocked && credentialId) {
+    if (!loading && user && credentialId && !isUnlocked) {
       const timer = setTimeout(() => {
         handleUnlock();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [loading, user, biometricEnabled, isUnlocked, credentialId]);
+  }, [loading, user, credentialId, isUnlocked]);
 
   if (loading) return null;
-  if (!user || !biometricEnabled) return <>{children}</>;
+  if (!user || !credentialId) return <>{children}</>;
 
   return (
     <>
@@ -109,10 +123,10 @@ export function AppLock({ children }: { children: React.ReactNode }) {
                       Ir a Ajustes y Registrar
                     </Button>
                     <button
-                      onClick={() => setLockError(null)}
+                      onClick={skipBiometrics}
                       className="mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
                     >
-                      Intentar de nuevo
+                      Entrar sin biometría
                     </button>
                   </motion.div>
                 ) : lockError === "generic" ? (
@@ -178,6 +192,12 @@ export function AppLock({ children }: { children: React.ReactNode }) {
                         </>
                       )}
                     </Button>
+                    <button
+                      onClick={skipBiometrics}
+                      className="mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                    >
+                      Entrar sin biometría
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>

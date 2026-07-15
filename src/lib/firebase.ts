@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { initializeFirestore, getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -14,6 +14,12 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 export const auth = getAuth(app);
+
+// Mantener la sesión en este dispositivo entre reinicios del navegador:
+// te logueás una sola vez por dispositivo y quedás adentro.
+if (typeof window !== "undefined") {
+  setPersistence(auth, browserLocalPersistence).catch(() => {});
+}
 
 let db: ReturnType<typeof getFirestore>;
 try {
