@@ -45,7 +45,7 @@ export function HealthScoreRing({ score, breakdown, className }: HealthScoreRing
               fill="none"
               stroke="currentColor"
               strokeWidth={stroke}
-              className="text-muted/30"
+              className="text-muted-foreground/20"
             />
             <motion.circle
               cx="70" cy="70" r={radius}

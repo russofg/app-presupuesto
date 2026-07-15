@@ -489,6 +489,7 @@ export default function DashboardPage() {
             dayOfMonth={now.getDate()}
             daysInMonth={new Date(year, month, 0).getDate()}
             currency={currency}
+            expenseAmounts={realTransactions.filter((t) => t.type === "expense").map((t) => t.amount)}
             isCurrentMonth={month === now.getMonth() + 1 && year === now.getFullYear()}
           />
         </motion.div>

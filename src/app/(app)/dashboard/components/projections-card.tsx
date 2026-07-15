@@ -15,9 +15,31 @@ interface ProjectionsCardProps {
   dayOfMonth: number;
   daysInMonth: number;
   currency: Currency;
+  // Montos individuales de gasto del mes en curso, para separar compras únicas
+  // grandes del gasto diario al proyectar.
+  expenseAmounts: number[];
   // Proyectar solo tiene sentido para el mes en curso. Para un mes ya cerrado
   // mostramos los valores reales, no una extrapolación (que inflaría el gasto).
   isCurrentMonth: boolean;
+}
+
+// Un gasto que representa más del 30% del total del mes se trata como compra
+// única (no es un hábito diario): se cuenta una vez y NO se extrapola. El resto
+// —gastos chicos y repetidos— sí se proyecta al ritmo diario.
+const ONE_OFF_SHARE = 0.3;
+
+function projectExpenses(amounts: number[], progress: number, prevExpenses: number): number {
+  const total = amounts.reduce((s, a) => s + a, 0);
+  if (progress <= 0.05) return prevExpenses > 0 ? prevExpenses : total;
+  if (total === 0) return 0;
+
+  let oneOff = 0;
+  let recurring = 0;
+  for (const a of amounts) {
+    if (a / total > ONE_OFF_SHARE) oneOff += a;
+    else recurring += a;
+  }
+  return oneOff + recurring / progress;
 }
 
 export function ProjectionsCard({
@@ -29,6 +51,7 @@ export function ProjectionsCard({
   dayOfMonth,
   daysInMonth,
   currency,
+  expenseAmounts,
   isCurrentMonth,
 }: ProjectionsCardProps) {
   const progress = dayOfMonth / daysInMonth;
@@ -40,10 +63,14 @@ export function ProjectionsCard({
     ? (prevIncome > 0 ? Math.max(prevIncome, income) : income)
     : income;
 
-  // Expenses: linear projection for the current month; real total for past months.
+  // Expenses: for the current month, project daily spending but count large
+  // one-off purchases only once. Past months show their real total.
   const projectedExpenses = isCurrentMonth
-    ? (progress > 0.05 ? expenses / progress : (prevExpenses > 0 ? prevExpenses : expenses))
+    ? projectExpenses(expenseAmounts, progress, prevExpenses)
     : expenses;
+
+  const expenseTotal = expenseAmounts.reduce((s, a) => s + a, 0);
+  const hasOneOff = isCurrentMonth && expenseTotal > 0 && expenseAmounts.some((a) => a / expenseTotal > ONE_OFF_SHARE);
 
   const projectedSavings = expectedIncome - projectedExpenses;
   const monthsToGoal = projectedSavings > 0 && savingsRemaining > 0
@@ -66,7 +93,9 @@ export function ProjectionsCard({
       color: "text-rose-500",
       bgColor: "bg-rose-500/10",
       detail: isCurrentMonth
-        ? (progress > 0.05 ? "al ritmo actual" : (prevExpenses > 0 ? "basado en mes anterior" : null))
+        ? (progress > 0.05
+            ? (hasOneOff ? "ritmo diario + compras únicas" : "al ritmo actual")
+            : (prevExpenses > 0 ? "basado en mes anterior" : null))
         : null,
     },
     {
