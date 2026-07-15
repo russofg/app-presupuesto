@@ -18,6 +18,8 @@ interface MetricCardProps {
   color?: "success" | "destructive" | "primary" | "default";
   subtitle?: string;
   trendLabel?: string;
+  // Si false, un aumento se muestra como malo (rojo). Ej: la card de Gastos.
+  higherIsBetter?: boolean;
 }
 
 const colorConfig = {
@@ -60,9 +62,11 @@ export function MetricCard({
   color = "default",
   subtitle,
   trendLabel = "este mes",
+  higherIsBetter = true,
 }: MetricCardProps) {
   const config = colorConfig[color];
   const change = getChangeInfo(value, previousValue);
+  const changeIsGood = change ? change.isUp === higherIsBetter : false;
   
   const ref = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
@@ -133,7 +137,7 @@ export function MetricCard({
             <>
               <div className={cn(
                 "flex items-center gap-0.5 text-[11px] font-semibold tabular-nums px-1.5 py-0.5 rounded-md",
-                change.isUp
+                changeIsGood
                   ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
                   : "text-rose-600 dark:text-rose-400 bg-rose-500/10"
               )}>

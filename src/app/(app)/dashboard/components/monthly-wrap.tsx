@@ -83,7 +83,12 @@ export function MonthlyWrap({
     .map(([id, amount]) => ({ category: categories.find((c) => c.id === id), amount }));
 
   const txCount = transactions.length;
-  const avgPerDay = expenses > 0 ? expenses / new Date(year, month, 0).getDate() : 0;
+  // Para el mes en curso dividimos por los días transcurridos (no el mes entero),
+  // si no el promedio diario queda subestimado a principio de mes.
+  const wrapNow = new Date();
+  const isWrapCurrentMonth = month === wrapNow.getMonth() + 1 && year === wrapNow.getFullYear();
+  const daysForAvg = isWrapCurrentMonth ? wrapNow.getDate() : new Date(year, month, 0).getDate();
+  const avgPerDay = expenses > 0 ? expenses / daysForAvg : 0;
   const incomeChange = prevIncome > 0 ? ((income - prevIncome) / prevIncome) * 100 : 0;
   const expenseChange = prevExpenses > 0 ? ((expenses - prevExpenses) / prevExpenses) * 100 : 0;
 

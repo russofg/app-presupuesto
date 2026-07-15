@@ -122,8 +122,10 @@ export function MercadoPagoWidget({ transactions = [], onImport }: MercadoPagoWi
     }
   };
 
-  const incomeTotal = movements.filter(m => m.type === "income").reduce((s, m) => s + m.amount, 0);
-  const expenseTotal = movements.filter(m => m.type === "expense").reduce((s, m) => s + m.amount, 0);
+  // Solo sumamos ARS porque los totales se muestran en ARS; mezclar monedas daría
+  // un total incorrecto.
+  const incomeTotal = movements.filter(m => m.type === "income" && m.currency === "ARS").reduce((s, m) => s + m.amount, 0);
+  const expenseTotal = movements.filter(m => m.type === "expense" && m.currency === "ARS").reduce((s, m) => s + m.amount, 0);
 
   return (
     <motion.div

@@ -15,11 +15,13 @@ export function formatCurrency(amount: number, currency: Currency = "ARS"): stri
 
 export function formatCompactCurrency(amount: number, currency: Currency = "ARS"): string {
   const symbol = currencySymbols[currency];
-  if (Math.abs(amount) >= 1_000_000) {
-    return `${symbol}${(amount / 1_000_000).toFixed(1)}M`;
+  const sign = amount < 0 ? "-" : "";
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000) {
+    return `${sign}${symbol}${(abs / 1_000_000).toFixed(1)}M`;
   }
-  if (Math.abs(amount) >= 1_000) {
-    return `${symbol}${(amount / 1_000).toFixed(1)}K`;
+  if (abs >= 1_000) {
+    return `${sign}${symbol}${(abs / 1_000).toFixed(1)}K`;
   }
   return formatCurrency(amount, currency);
 }

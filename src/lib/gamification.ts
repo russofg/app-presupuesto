@@ -92,7 +92,6 @@ export function calculateStreak(lastActiveDate: string | null): {
 
   const today = new Date();
   const todayStr = formatDateKey(today);
-  const last = new Date(lastActiveDate + "T12:00:00");
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = formatDateKey(yesterday);
@@ -128,11 +127,19 @@ export function calculateHealthScore(data: {
   const budgetScore = calculateBudgetScore(data.budgets);
   const goalsScore = calculateGoalsScore(data.goals);
 
-  const score = Math.round(
-    savingsScore * 0.45 +
-    budgetScore * 0.30 +
-    goalsScore * 0.25
-  );
+  // Solo ponderamos los componentes con datos y redistribuimos su peso. Así un
+  // usuario que ahorra bien pero no cargó presupuestos ni metas no queda topeado
+  // en ~45 por dos componentes en 0 que no aplican todavía.
+  const components = [
+    { score: savingsScore, weight: 0.45, active: data.income > 0 },
+    { score: budgetScore, weight: 0.30, active: data.budgets.length > 0 },
+    { score: goalsScore, weight: 0.25, active: data.goals.length > 0 },
+  ].filter((c) => c.active);
+
+  const totalWeight = components.reduce((s, c) => s + c.weight, 0);
+  const score = totalWeight > 0
+    ? Math.round(components.reduce((s, c) => s + c.score * c.weight, 0) / totalWeight)
+    : 0;
 
   const savingsRate = data.income > 0 ? ((data.income - data.expenses) / data.income) * 100 : 0;
 

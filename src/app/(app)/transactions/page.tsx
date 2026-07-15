@@ -306,8 +306,10 @@ export default function TransactionsPage() {
                         description: txToDelete.description,
                         categoryId: txToDelete.categoryId,
                         date: new Date(txToDelete.date),
+                        paymentMethod: txToDelete.paymentMethod,
                         tags: txToDelete.tags ?? [],
                         isRecurring: txToDelete.isRecurring ?? false,
+                        recurringId: txToDelete.recurringId,
                         notes: txToDelete.notes ?? "",
                       });
                       toast.success("Movimiento restaurado");
