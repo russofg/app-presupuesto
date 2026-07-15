@@ -23,6 +23,14 @@ import type { Transaction, Category } from "@/types";
 import { filterRealTransactions } from "@/lib/transactions-utils";
 import { toast } from "sonner";
 
+// Escapa comillas y neutraliza inyección de fórmulas (=, +, -, @, tab, CR al
+// inicio) para que un texto malicioso no se ejecute como fórmula en Excel/Sheets.
+function csvCell(value: string): string {
+  const escaped = value.replace(/"/g, '""');
+  const guarded = /^[=+\-@\t\r]/.test(escaped) ? `'${escaped}` : escaped;
+  return `"${guarded}"`;
+}
+
 function exportToCSV(transactions: Transaction[], categories: Category[], monthLabel: string) {
   const header = "Fecha,Tipo,Descripción,Categoría,Monto,Notas\n";
   const rows = transactions
@@ -32,9 +40,9 @@ function exportToCSV(transactions: Transaction[], categories: Category[], monthL
       const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const type = t.type === "income" ? "Ingreso" : "Gasto";
       const cat = categories.find((c) => c.id === t.categoryId)?.name || "Sin categoría";
-      const desc = `"${t.description.replace(/"/g, '""')}"`;
-      const notes = t.notes ? `"${t.notes.replace(/"/g, '""')}"` : "";
-      return `${date},${type},${desc},${cat},${t.amount},${notes}`;
+      const desc = csvCell(t.description);
+      const notes = t.notes ? csvCell(t.notes) : "";
+      return `${date},${type},${desc},${csvCell(cat)},${t.amount},${notes}`;
     })
     .join("\n");
 

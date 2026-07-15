@@ -179,10 +179,15 @@ function parseGeneric(rows: Record<string, string>[], headers: string[]): ParseR
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function findValue(row: Record<string, string>, keys: string[]): string {
+  const entries = Object.entries(row);
+  // 1) coincidencia exacta del nombre de columna
   for (const key of keys) {
-    for (const [k, v] of Object.entries(row)) {
-      if (k.includes(key) || key.includes(k)) return v;
-    }
+    for (const [k, v] of entries) if (k === key) return v;
+  }
+  // 2) la columna CONTIENE el término buscado (no al revés: evita que una
+  //    columna genérica como "saldo total" matchee un término como "total")
+  for (const key of keys) {
+    for (const [k, v] of entries) if (k.includes(key)) return v;
   }
   return "";
 }
