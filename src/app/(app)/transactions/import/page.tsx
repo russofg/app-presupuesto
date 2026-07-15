@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { staggerContainer, fadeInUp } from "@/lib/motion";
 import { useAuth } from "@/hooks/use-auth";
 import { useCategories } from "@/hooks/use-categories";
-import { createTransaction } from "@/lib/services/firestore";
+import { createImportedTransaction } from "@/lib/services/firestore";
 import { parseCSV, suggestCategory, type ParsedTransaction } from "@/lib/csv-parser";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
@@ -53,6 +53,7 @@ export default function ImportPage() {
   const [dragOver, setDragOver] = useState(false);
   const [progress, setProgress] = useState(0);
   const [importedCount, setImportedCount] = useState(0);
+  const [skippedCount, setSkippedCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const defaultCategoryId = categories?.find((c) => c.name === "Otros")?.id ?? "";
@@ -134,11 +135,13 @@ export default function ImportPage() {
     setProgress(0);
 
     let imported = 0;
+    let skipped = 0;
+    let processed = 0;
     const total = selectedRows.length;
 
     for (const row of selectedRows) {
       try {
-        await createTransaction(user.uid, {
+        const created = await createImportedTransaction(user.uid, {
           type: row.type,
           amount: row.amount,
           description: row.description.slice(0, 200),
@@ -148,16 +151,22 @@ export default function ImportPage() {
           isRecurring: false,
           notes: `Importado desde CSV (${format})`,
         });
-        imported++;
+        if (created) imported++;
+        else skipped++; // ya existía (mismo CSV importado antes)
       } catch {
-        // skip failed rows silently
+        skipped++;
       }
-      setProgress(Math.round(((imported) / total) * 100));
+      processed++;
+      setProgress(Math.round((processed / total) * 100));
     }
 
     setImportedCount(imported);
+    setSkippedCount(skipped);
     setStep("done");
-    toast.success(`${imported} movimientos importados correctamente`);
+    toast.success(
+      `${imported} movimiento${imported === 1 ? "" : "s"} importado${imported === 1 ? "" : "s"}` +
+      (skipped > 0 ? ` · ${skipped} ya estaba${skipped === 1 ? "" : "n"}` : "")
+    );
   };
 
   return (
@@ -448,6 +457,9 @@ export default function ImportPage() {
             <h3 className="text-lg font-semibold mb-2">¡Importación completa!</h3>
             <p className="text-sm text-muted-foreground mb-8">
               Se importaron <strong>{importedCount}</strong> movimientos correctamente.
+              {skippedCount > 0 && (
+                <> Se omitieron <strong>{skippedCount}</strong> que ya estaban.</>
+              )}
             </p>
             <div className="flex items-center justify-center gap-3">
               <Button

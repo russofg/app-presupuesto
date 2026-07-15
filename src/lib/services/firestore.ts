@@ -375,6 +375,53 @@ export async function createTransaction(userId: string, input: CreateTransaction
   return docRef.id;
 }
 
+// Hash determinístico (cyrb53) para armar el ID de una transacción importada a
+// partir de su contenido, y así deduplicar re-importaciones del mismo CSV.
+function hashString(str: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * Crea una transacción importada con ID determinístico (fecha+monto+descripción+
+ * tipo, por usuario). Re-importar el mismo CSV apunta al mismo documento en vez
+ * de duplicar. Devuelve true solo si realmente creó una nueva (así no se suma XP
+ * dos veces). Nota: dos transacciones idénticas (mismo día/monto/descripción) se
+ * consideran la misma.
+ */
+export async function createImportedTransaction(
+  userId: string,
+  input: CreateTransactionInput
+): Promise<boolean> {
+  const d = input.date;
+  const dateKey = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const fingerprint = `${userId}|${input.type}|${dateKey}|${input.amount}|${input.description.trim().toLowerCase()}`;
+  const docRef = doc(db, "transactions", `imp_${hashString(fingerprint)}`);
+
+  const existing = await getDoc(docRef);
+  if (existing.exists()) return false;
+
+  const batch = writeBatch(db);
+  batch.set(docRef, cleanData({
+    ...input,
+    userId,
+    date: Timestamp.fromDate(input.date),
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now(),
+  }));
+  batch.set(doc(db, "settings", userId), { totalXP: increment(XP_VALUES.transaction) }, { merge: true });
+  await batch.commit();
+  return true;
+}
+
 export async function updateTransaction(id: string, data: Partial<CreateTransactionInput>): Promise<void> {
   const updateData: Record<string, unknown> = { ...data, updatedAt: Timestamp.now() };
   if (data.date) updateData.date = Timestamp.fromDate(data.date);
