@@ -1,5 +1,6 @@
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { readFileSync } from "fs";
 
 /**
  * Firebase Admin SDK — server-only.
@@ -31,11 +32,30 @@ function getAdminApp(): App {
     throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY no configurada");
   }
 
-  let serviceAccount: Record<string, unknown>;
-  try {
-    serviceAccount = JSON.parse(raw);
-  } catch {
-    throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY no es un JSON válido");
+  // Acepta tres formatos, en orden:
+  //  1) JSON crudo
+  //  2) ruta a un archivo .json (cómodo para dev local: FIREBASE_SERVICE_ACCOUNT_KEY=/ruta/al/archivo.json)
+  //  3) JSON en base64 (recomendado para prod/Netlify: no rompe por comillas ni saltos)
+  const tryJson = (s: string): Record<string, unknown> | null => {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return null;
+    }
+  };
+  const tryFile = (p: string): Record<string, unknown> | null => {
+    try {
+      return tryJson(readFileSync(p.trim(), "utf8"));
+    } catch {
+      return null;
+    }
+  };
+  const serviceAccount =
+    tryJson(raw) ??
+    (raw.trim().endsWith(".json") ? tryFile(raw) : null) ??
+    tryJson(Buffer.from(raw, "base64").toString("utf8"));
+  if (!serviceAccount) {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY no es JSON, ruta .json ni base64 válido");
   }
 
   adminApp = initializeApp({
