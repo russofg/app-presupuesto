@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { verifyRequestAuth, AuthError } from "@/lib/firebase-admin";
 
 const MP_API_BASE = "https://api.mercadopago.com";
 
@@ -17,6 +18,15 @@ function mapOperationType(type: string): string {
 }
 
 export async function GET(request: Request) {
+  try {
+    await verifyRequestAuth(request);
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: "No autorizado" }, { status: err.status });
+    }
+    return NextResponse.json({ error: "Auth no configurada" }, { status: 500 });
+  }
+
   const accessToken = process.env.MP_ACCESS_TOKEN;
 
   if (!accessToken) {

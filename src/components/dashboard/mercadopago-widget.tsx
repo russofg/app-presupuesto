@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { auth } from "@/lib/firebase";
 import type { Transaction } from "@/types";
 
 interface MpMovement {
@@ -68,7 +69,11 @@ export function MercadoPagoWidget({ transactions = [], onImport }: MercadoPagoWi
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/mercadopago/movements?limit=50");
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return; // Not signed in yet — skip fetch gracefully (finally resets loading)
+      const res = await fetch("/api/mercadopago/movements?limit=50", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Error al obtener movimientos");
 

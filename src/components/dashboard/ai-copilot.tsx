@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles } from "lucide-react";
+import { auth } from "@/lib/firebase";
 
 interface AiCopilotProps {
   totalIncome: number;
@@ -48,9 +49,14 @@ export function AiCopilot({ totalIncome, totalExpenses, username }: AiCopilotPro
 
       // 3. Llamar a la API
       try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return; // No hay sesión aún — omitimos la llamada (finally resetea loading)
         const response = await fetch("/api/insights", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({ totalIncome, totalExpenses, username }),
         });
         const data = await response.json();

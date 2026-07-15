@@ -1,10 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
+import { verifyRequestAuth, AuthError } from "@/lib/firebase-admin";
 
 // Initialize the Gemini SDK
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function POST(request: Request) {
+  try {
+    await verifyRequestAuth(request);
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: "No autorizado" }, { status: err.status });
+    }
+    return NextResponse.json({ error: "Auth no configurada" }, { status: 500 });
+  }
+
   try {
     const body = await request.json();
     const { totalIncome, totalExpenses, username } = body;
