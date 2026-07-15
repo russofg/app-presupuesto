@@ -13,6 +13,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { deleteAllUserData } from "@/lib/services/firestore";
 
 const googleProvider = new GoogleAuthProvider();
 
@@ -52,5 +53,8 @@ export async function changePassword(currentPassword: string, newPassword: strin
 export async function deleteAccount(): Promise<void> {
   const user = auth.currentUser;
   if (!user) throw new Error("No hay usuario autenticado");
+  // Borrar los datos de Firestore ANTES de eliminar el usuario de Auth: una vez
+  // borrado el usuario, las reglas ya no permiten acceder a esos documentos.
+  await deleteAllUserData(user.uid);
   await deleteUser(user);
 }

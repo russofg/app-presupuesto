@@ -21,6 +21,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { XP_VALUES } from "@/lib/gamification";
+import { addMonths } from "@/lib/date-utils";
 import type {
   Transaction,
   Category,
@@ -83,7 +84,26 @@ export async function createUserSettings(userId: string, settings: Record<string
 
 export async function updateUserSettings(userId: string, settings: Partial<UserSettings>): Promise<void> {
   const docRef = doc(db, "settings", userId);
-  await updateDoc(docRef, { ...settings, updatedAt: Timestamp.now() });
+  await updateDoc(docRef, cleanData({ ...settings, updatedAt: Timestamp.now() }));
+}
+
+/**
+ * Borra TODOS los datos del usuario en Firestore (transacciones, categorías,
+ * presupuestos, metas, recurrentes y settings). Se llama antes de eliminar la
+ * cuenta de Auth para no dejar documentos huérfanos e inaccesibles.
+ */
+export async function deleteAllUserData(userId: string): Promise<void> {
+  const collections = ["transactions", "categories", "budgets", "savingsGoals", "recurringTransactions"];
+  for (const coll of collections) {
+    const snap = await getDocs(query(collection(db, coll), where("userId", "==", userId)));
+    const refs = snap.docs.map((d) => d.ref);
+    for (let i = 0; i < refs.length; i += 400) {
+      const batch = writeBatch(db);
+      for (const ref of refs.slice(i, i + 400)) batch.delete(ref);
+      await batch.commit();
+    }
+  }
+  await deleteDoc(doc(db, "settings", userId));
 }
 
 // ─── MercadoPago imported IDs ────────────────────────────────────────────────
@@ -337,14 +357,14 @@ export async function getTransactions(
 export async function createTransaction(userId: string, input: CreateTransactionInput): Promise<string> {
   const batch = writeBatch(db);
   const docRef = doc(collection(db, "transactions"));
-  
-  batch.set(docRef, {
+
+  batch.set(docRef, cleanData({
     ...input,
     userId,
     date: Timestamp.fromDate(input.date),
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
-  });
+  }));
 
   const settingsRef = doc(db, "settings", userId);
   batch.set(settingsRef, {
@@ -358,7 +378,7 @@ export async function createTransaction(userId: string, input: CreateTransaction
 export async function updateTransaction(id: string, data: Partial<CreateTransactionInput>): Promise<void> {
   const updateData: Record<string, unknown> = { ...data, updatedAt: Timestamp.now() };
   if (data.date) updateData.date = Timestamp.fromDate(data.date);
-  await updateDoc(doc(db, "transactions", id), updateData);
+  await updateDoc(doc(db, "transactions", id), cleanData(updateData));
 }
 
 export async function deleteTransaction(id: string, userId?: string): Promise<void> {
@@ -519,8 +539,8 @@ function getNextRecurringDate(current: Date, frequency: string): Date {
     case "daily": next.setDate(next.getDate() + 1); break;
     case "weekly": next.setDate(next.getDate() + 7); break;
     case "biweekly": next.setDate(next.getDate() + 14); break;
-    case "monthly": next.setMonth(next.getMonth() + 1); break;
-    case "yearly": next.setFullYear(next.getFullYear() + 1); break;
+    case "monthly": return addMonths(next, 1);
+    case "yearly": return addMonths(next, 12);
   }
   return next;
 }
@@ -574,10 +594,14 @@ export async function processRecurringTransactions(userId: string): Promise<numb
   for (const rule of recurring) {
     let nextDate = new Date(rule.nextDate);
 
-    while (nextDate <= now) {
+    // Tope de seguridad: evita cientos de round-trips si una regla quedó con
+    // nextDate muy en el pasado (~1 año de ocurrencias diarias como máximo).
+    let guard = 0;
+    while (nextDate <= now && guard < 400) {
       const wasCreated = await createRecurringOccurrence(userId, rule, nextDate);
       if (wasCreated) created++;
       nextDate = getNextRecurringDate(nextDate, rule.frequency);
+      guard++;
     }
 
     if (nextDate.getTime() !== new Date(rule.nextDate).getTime()) {

@@ -29,6 +29,7 @@ import { createTransactionSchema, paymentMethodLabels, paymentMethodsByType, typ
 import { Loader2, Repeat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { addMonths } from "@/lib/date-utils";
 
 const frequencyLabels: Record<RecurringFrequency, string> = {
   daily: "Diario",
@@ -137,13 +138,13 @@ export function TransactionDialog({
       await createMutation.mutateAsync(txData);
 
       if (recurring) {
-        const nextDate = new Date(data.date);
+        let nextDate = new Date(data.date);
         switch (frequency) {
           case "daily": nextDate.setDate(nextDate.getDate() + 1); break;
           case "weekly": nextDate.setDate(nextDate.getDate() + 7); break;
           case "biweekly": nextDate.setDate(nextDate.getDate() + 14); break;
-          case "monthly": nextDate.setMonth(nextDate.getMonth() + 1); break;
-          case "yearly": nextDate.setFullYear(nextDate.getFullYear() + 1); break;
+          case "monthly": nextDate = addMonths(nextDate, 1); break;
+          case "yearly": nextDate = addMonths(nextDate, 12); break;
         }
         await createRecurring.mutateAsync({
           type: data.type,
