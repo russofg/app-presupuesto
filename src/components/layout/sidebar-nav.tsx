@@ -19,6 +19,7 @@ import {
   CalendarDays,
   CreditCard,
   DollarSign,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logOut } from "@/lib/services/auth";
@@ -37,6 +38,7 @@ const navItems = [
   { href: "/goals", label: "Metas", icon: Target },
   { href: "/calendar", label: "Calendario", icon: CalendarDays },
   { href: "/subscriptions", label: "Suscripciones", icon: CreditCard },
+  { href: "/facturas", label: "Facturas", icon: FileText },
   { href: "/dolar", label: "Dólar", icon: DollarSign },
   { href: "/reports", label: "Reportes", icon: BarChart3 },
   { href: "/categories", label: "Categorías", icon: Tags },

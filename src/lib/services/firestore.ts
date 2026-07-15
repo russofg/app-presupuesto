@@ -499,3 +499,67 @@ export async function processRecurringTransactions(userId: string): Promise<numb
 
   return created;
 }
+
+// ─── Facturas ARCA ────────────────────────────────────────────────────────────
+
+export interface Factura {
+  id: string;
+  nroFactura: number;
+  ptoVenta: number;
+  fecha: Date;
+  clienteNombre: string;
+  clienteDoc: string;
+  clienteDocTipo: number; // 80=CUIT, 96=DNI
+  condicionIva: number;   // 5=Consumidor Final, etc
+  concepto: string;
+  conceptoTipo: number;   // 1=Prod, 2=Serv, 3=Ambos
+  fchServDesde?: string;
+  fchServHasta?: string;
+  fchVtoPago?: string;
+  importe: number;
+  cae: string;
+  vencimientoCae: string; // YYYYMMDD
+  transactionId?: string;
+  createdAt: Date;
+}
+
+export type CreateFacturaInput = Omit<Factura, "id" | "createdAt">;
+
+export async function createFactura(userId: string, data: CreateFacturaInput): Promise<string> {
+  const ref = collection(db, "facturas", userId, "items");
+  const docRef = await addDoc(ref, {
+    ...data,
+    fecha: Timestamp.fromDate(data.fecha instanceof Date ? data.fecha : new Date(data.fecha)),
+    createdAt: Timestamp.now(),
+  });
+  return docRef.id;
+}
+
+export async function getFacturas(userId: string): Promise<Factura[]> {
+  const ref = collection(db, "facturas", userId, "items");
+  const q = query(ref, orderBy("fecha", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      nroFactura: data.nroFactura,
+      ptoVenta: data.ptoVenta,
+      fecha: data.fecha instanceof Timestamp ? data.fecha.toDate() : new Date(data.fecha),
+      clienteNombre: data.clienteNombre,
+      clienteDoc: data.clienteDoc,
+      clienteDocTipo: data.clienteDocTipo,
+      condicionIva: data.condicionIva ?? 5,
+      concepto: data.concepto,
+      conceptoTipo: data.conceptoTipo ?? 2,
+      fchServDesde: data.fchServDesde,
+      fchServHasta: data.fchServHasta,
+      fchVtoPago: data.fchVtoPago,
+      importe: data.importe,
+      cae: data.cae,
+      vencimientoCae: data.vencimientoCae,
+      transactionId: data.transactionId,
+      createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
+    };
+  });
+}

@@ -33,13 +33,15 @@ import {
   ArrowLeftRight,
   Repeat,
   Upload,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDeleteTransaction, useCreateTransaction } from "@/hooks/use-transactions";
 import { useUISounds } from "@/hooks/use-ui-sounds";
-import type { Transaction } from "@/types";
+import { paymentMethodLabels, type Transaction } from "@/types";
+import { FacturaModal } from "@/components/facturas/factura-modal";
 
 export default function TransactionsPage() {
   const { settings } = useAuth();
@@ -52,6 +54,7 @@ export default function TransactionsPage() {
   const searchParams = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [facturaTx, setFacturaTx] = useState<Transaction | null>(null);
 
   useEffect(() => {
     if (searchParams.get("new") === "1") {
@@ -252,6 +255,7 @@ export default function TransactionsPage() {
                           </div>
                           <p className="text-xs text-muted-foreground">
                             {cat?.name || "Sin categoría"}
+                            {tx.paymentMethod && ` · ${paymentMethodLabels[tx.paymentMethod]}`}
                           </p>
                         </div>
                         <span
@@ -263,6 +267,15 @@ export default function TransactionsPage() {
                           {tx.type === "income" ? "+" : "-"}
                           {formatCurrency(tx.amount, currency)}
                         </span>
+                        {tx.type === "income" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setFacturaTx(tx); }}
+                            className="p-1 rounded-lg hover:bg-emerald-500/10 text-emerald-500 shrink-0 transition-colors"
+                            title="Emitir factura"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </SwipeableRow>
                   );
@@ -317,6 +330,14 @@ export default function TransactionsPage() {
             }
           );
         }}
+      />
+
+      <FacturaModal
+        open={!!facturaTx}
+        onClose={() => setFacturaTx(null)}
+        defaultImporte={facturaTx?.amount}
+        defaultConcepto={facturaTx?.description?.replace(/^\[MP\] /, "")}
+        transactionId={facturaTx?.id}
       />
     </motion.div>
     </PullToRefresh>
