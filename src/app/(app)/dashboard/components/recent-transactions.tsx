@@ -4,7 +4,7 @@ import Link from "next/link";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { CategoryIcon } from "@/components/category-icon";
 import { EmptyState } from "@/components/empty-state";
-import type { Transaction, Category, Currency } from "@/types";
+import { paymentMethodLabels, type Transaction, type Category, type Currency } from "@/types";
 import { ArrowLeftRight, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +55,10 @@ export function RecentTransactions({ transactions, categories, currency, onEdit,
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{tx.description}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(new Date(tx.date))}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(new Date(tx.date))}
+                    {tx.paymentMethod && ` · ${paymentMethodLabels[tx.paymentMethod]}`}
+                  </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span

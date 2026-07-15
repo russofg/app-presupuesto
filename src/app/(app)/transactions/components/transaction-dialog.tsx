@@ -25,7 +25,7 @@ import { CategoryIcon } from "@/components/category-icon";
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
 import { useCreateRecurring } from "@/hooks/use-recurring";
 import { useUISounds } from "@/hooks/use-ui-sounds";
-import { createTransactionSchema, type CreateTransactionInput, type Transaction, type Category, type RecurringFrequency } from "@/types";
+import { createTransactionSchema, paymentMethodLabels, paymentMethodsByType, type CreateTransactionInput, type Transaction, type Category, type RecurringFrequency } from "@/types";
 import { Loader2, Repeat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -66,6 +66,7 @@ export function TransactionDialog({
     control,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<CreateTransactionInput>({
     resolver: zodResolver(createTransactionSchema),
@@ -75,6 +76,7 @@ export function TransactionDialog({
       description: "",
       categoryId: "",
       date: new Date(),
+      paymentMethod: "cash",
       tags: [],
       isRecurring: false,
       notes: "",
@@ -82,6 +84,16 @@ export function TransactionDialog({
   });
 
   const selectedType = watch("type");
+  const selectedPaymentMethod = watch("paymentMethod");
+
+  // Si cambia el tipo y el medio elegido ya no aplica (ej: tarjeta en un ingreso),
+  // lo reseteo a Efectivo para no guardar una combinación inválida.
+  useEffect(() => {
+    const allowed = paymentMethodsByType[selectedType];
+    if (selectedPaymentMethod && !allowed.includes(selectedPaymentMethod)) {
+      setValue("paymentMethod", "cash");
+    }
+  }, [selectedType, selectedPaymentMethod, setValue]);
 
   useEffect(() => {
     if (transaction) {
@@ -91,6 +103,7 @@ export function TransactionDialog({
         description: transaction.description,
         categoryId: transaction.categoryId,
         date: new Date(transaction.date),
+        paymentMethod: transaction.paymentMethod ?? "cash",
         tags: transaction.tags || [],
         isRecurring: transaction.isRecurring,
         notes: transaction.notes || "",
@@ -103,6 +116,7 @@ export function TransactionDialog({
         description: "",
         categoryId: "",
         date: new Date(),
+        paymentMethod: "cash",
         tags: [],
         isRecurring: false,
         notes: "",
@@ -258,6 +272,28 @@ export function TransactionDialog({
             {errors.categoryId && (
               <p className="text-xs text-destructive">{errors.categoryId.message}</p>
             )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Medio de pago</Label>
+            <Controller
+              control={control}
+              name="paymentMethod"
+              render={({ field }) => (
+                <Select value={field.value ?? "cash"} onValueChange={field.onChange}>
+                  <SelectTrigger className="h-11 rounded-xl">
+                    <SelectValue placeholder="Elegí un medio de pago" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentMethodsByType[selectedType].map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {paymentMethodLabels[method]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
 
           {/* Recurring toggle */}

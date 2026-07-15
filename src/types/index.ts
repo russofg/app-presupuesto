@@ -23,6 +23,27 @@ export const currencySymbols: Record<Currency, string> = {
 export const transactionTypes = ["income", "expense"] as const;
 export type TransactionType = (typeof transactionTypes)[number];
 
+// ─── Payment Methods ────────────────────────────────────────────────────────
+
+export const paymentMethods = [
+  "cash", "transfer", "mercadopago", "card_visa_ciudad", "card_mercadopago",
+] as const;
+export type PaymentMethod = (typeof paymentMethods)[number];
+
+export const paymentMethodLabels: Record<PaymentMethod, string> = {
+  cash: "Efectivo",
+  transfer: "Transferencia",
+  mercadopago: "MercadoPago",
+  card_visa_ciudad: "Tarjeta VISA Banco Ciudad",
+  card_mercadopago: "Tarjeta MercadoPago",
+};
+
+// Las tarjetas de crédito solo aplican a gastos (de ahí sale la plata, no entra).
+export const paymentMethodsByType: Record<TransactionType, PaymentMethod[]> = {
+  income: ["cash", "transfer", "mercadopago"],
+  expense: ["cash", "transfer", "mercadopago", "card_visa_ciudad", "card_mercadopago"],
+};
+
 // ─── Category Schema ────────────────────────────────────────────────────────
 
 export const ALLOWED_ICONS = [
@@ -65,6 +86,7 @@ export const transactionSchema = z.object({
   description: z.string().min(1).max(200),
   categoryId: z.string(),
   date: z.date(),
+  paymentMethod: z.enum(paymentMethods).optional(),
   tags: z.array(z.string().max(50)).max(10).default([]),
   isRecurring: z.boolean().default(false),
   recurringId: z.string().optional(),
@@ -160,6 +182,7 @@ export const createTransactionSchema = z.object({
   description: z.string().min(1, "La descripción es obligatoria").max(200),
   categoryId: z.string().min(1, "La categoría es obligatoria"),
   date: z.date(),
+  paymentMethod: z.enum(paymentMethods).optional(),
   tags: z.array(z.string().max(50)).max(10),
   isRecurring: z.boolean(),
   recurringId: z.string().optional(),
