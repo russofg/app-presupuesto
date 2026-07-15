@@ -15,9 +15,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PiggyBank, Wallet } from "lucide-react";
-import { useUpdateGoal } from "@/hooks/use-goals";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { addDeficitCovered } from "@/lib/services/firestore";
+import { coverDeficitFromGoal } from "@/lib/services/firestore";
 import { toast } from "sonner";
 
 interface CoverDeficitCardProps {
@@ -36,7 +36,7 @@ export function CoverDeficitCard({ deficit, deficitCovered, savings, goals, curr
   const [amount, setAmount] = useState("");
   const [covering, setCovering] = useState(false);
   const { user, refreshSettings } = useAuth();
-  const updateMutation = useUpdateGoal();
+  const queryClient = useQueryClient();
 
   const remainingDeficit = Math.max(0, deficit - deficitCovered);
   const goalsWithBalance = goals.filter((g) => g.currentAmount > 0);
@@ -62,18 +62,16 @@ export function CoverDeficitCard({ deficit, deficitCovered, savings, goals, curr
     setCovering(true);
 
     try {
-      await updateMutation.mutateAsync({
-        id: goal.id,
-        data: { currentAmount: goal.currentAmount - toCover },
-      });
-
-      await addDeficitCovered(user.uid, month, year, toCover);
+      await coverDeficitFromGoal(user.uid, goal.id, month, year, toCover);
+      await queryClient.invalidateQueries({ queryKey: ["goals"] });
       await refreshSettings();
 
       toast.success(`Cubriste ${formatCurrency(toCover, currency)} del déficit con "${goal.name}"`);
       setOpen(false);
       setSelectedGoalId("");
       setAmount("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo cubrir el déficit");
     } finally {
       setCovering(false);
     }
@@ -154,10 +152,10 @@ export function CoverDeficitCard({ deficit, deficitCovered, savings, goals, curr
             </div>
             <Button
               onClick={handleCover}
-              disabled={!selectedGoalId || !amount || updateMutation.isPending || covering}
+              disabled={!selectedGoalId || !amount || covering}
               className="w-full rounded-xl"
             >
-              {updateMutation.isPending || covering ? "Procesando..." : "Cubrir déficit"}
+              {covering ? "Procesando..." : "Cubrir déficit"}
             </Button>
           </div>
         </DialogContent>

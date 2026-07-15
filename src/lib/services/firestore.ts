@@ -17,6 +17,7 @@ import {
   limit,
   increment,
   arrayUnion,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { XP_VALUES } from "@/lib/gamification";
@@ -117,6 +118,93 @@ export async function setDeficitCovered(userId: string, month: number, year: num
   await updateUserSettings(userId, {
     deficitCoveredByMonth: { ...current, [key]: amount },
   } as Partial<UserSettings>);
+}
+
+/**
+ * Cubre parte del déficit del mes retirando `amount` de una meta de ahorro,
+ * de forma ATÓMICA: la meta (currentAmount) y los settings
+ * (deficitCoveredByMonth) se actualizan dentro de una única transacción de
+ * Firestore, por lo que un fallo parcial no puede desincronizar los datos.
+ */
+export async function coverDeficitFromGoal(
+  userId: string,
+  goalId: string,
+  month: number,
+  year: number,
+  amount: number
+): Promise<void> {
+  const goalRef = doc(db, "savingsGoals", goalId);
+  const settingsRef = doc(db, "settings", userId);
+  const key = `${year}-${month}`;
+
+  await runTransaction(db, async (tx) => {
+    const goalSnap = await tx.get(goalRef);
+    if (!goalSnap.exists()) throw new Error("La meta no existe");
+    const settingsSnap = await tx.get(settingsRef);
+
+    if (amount <= 0) throw new Error("El monto debe ser positivo");
+    const currentAmount = Number(goalSnap.data()?.currentAmount ?? 0);
+    if (amount > currentAmount) throw new Error("El monto supera el saldo de la meta");
+
+    const covered =
+      (settingsSnap.data()?.deficitCoveredByMonth as Record<string, number> | undefined) ?? {};
+    const prev = covered[key] ?? 0;
+
+    tx.update(goalRef, {
+      currentAmount: currentAmount - amount,
+      updatedAt: Timestamp.now(),
+    });
+    tx.set(
+      settingsRef,
+      { deficitCoveredByMonth: { ...covered, [key]: prev + amount }, updatedAt: Timestamp.now() },
+      { merge: true }
+    );
+  });
+}
+
+/**
+ * Devuelve `amount` desde el déficit cubierto del mes de vuelta a una meta, de
+ * forma ATÓMICA y CONSERVATIVA: dentro de la transacción valida contra el valor
+ * cubierto realmente leído (no confía en un absoluto del cliente) y decrementa
+ * el cubierto de forma incremental. Así el total (meta + cubierto) se conserva
+ * y la devolución no puede reproducirse para fabricar plata.
+ */
+export async function refundExcessToGoal(
+  userId: string,
+  goalId: string,
+  month: number,
+  year: number,
+  amount: number
+): Promise<void> {
+  const goalRef = doc(db, "savingsGoals", goalId);
+  const settingsRef = doc(db, "settings", userId);
+  const key = `${year}-${month}`;
+
+  await runTransaction(db, async (tx) => {
+    const goalSnap = await tx.get(goalRef);
+    if (!goalSnap.exists()) throw new Error("La meta no existe");
+    const settingsSnap = await tx.get(settingsRef);
+
+    if (amount <= 0) throw new Error("El monto debe ser positivo");
+    const currentAmount = Number(goalSnap.data()?.currentAmount ?? 0);
+    const covered =
+      (settingsSnap.data()?.deficitCoveredByMonth as Record<string, number> | undefined) ?? {};
+    const prev = covered[key] ?? 0;
+
+    // No se puede devolver más de lo cubierto: la devolución mueve plata del
+    // "cubierto" de vuelta a la meta, conservando el total (meta + cubierto).
+    if (amount > prev) throw new Error("El monto supera lo cubierto este mes");
+
+    tx.update(goalRef, {
+      currentAmount: currentAmount + amount,
+      updatedAt: Timestamp.now(),
+    });
+    tx.set(
+      settingsRef,
+      { deficitCoveredByMonth: { ...covered, [key]: prev - amount }, updatedAt: Timestamp.now() },
+      { merge: true }
+    );
+  });
 }
 
 // ─── Categories ─────────────────────────────────────────────────────────────

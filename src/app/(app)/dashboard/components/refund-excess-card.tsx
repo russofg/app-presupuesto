@@ -14,9 +14,9 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RotateCcw } from "lucide-react";
-import { useUpdateGoal } from "@/hooks/use-goals";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { setDeficitCovered } from "@/lib/services/firestore";
+import { refundExcessToGoal } from "@/lib/services/firestore";
 import { toast } from "sonner";
 
 interface RefundExcessCardProps {
@@ -42,7 +42,7 @@ export function RefundExcessCard({
   const [selectedGoalId, setSelectedGoalId] = useState("");
   const [refunding, setRefunding] = useState(false);
   const { user, refreshSettings } = useAuth();
-  const updateMutation = useUpdateGoal();
+  const queryClient = useQueryClient();
 
   const excess = deficitCovered - deficit;
   const canRefund = excess > 0 && goals.length > 0 && user;
@@ -55,19 +55,17 @@ export function RefundExcessCard({
     if (!goal) return;
 
     const amountToRefund = refundAll ? deficitCovered : excess;
-    const newDeficitCovered = refundAll ? 0 : deficit;
 
     setRefunding(true);
     try {
-      await updateMutation.mutateAsync({
-        id: goal.id,
-        data: { currentAmount: goal.currentAmount + amountToRefund },
-      });
-      await setDeficitCovered(user.uid, month, year, newDeficitCovered);
+      await refundExcessToGoal(user.uid, goal.id, month, year, amountToRefund);
+      await queryClient.invalidateQueries({ queryKey: ["goals"] });
       await refreshSettings();
       onRefunded();
       toast.success(`Devolviste ${formatCurrency(amountToRefund, currency)} a "${goal.name}"`);
       setOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo devolver el exceso");
     } finally {
       setRefunding(false);
     }
@@ -137,18 +135,18 @@ export function RefundExcessCard({
             <div className="flex gap-2">
               <Button
                 onClick={() => handleRefund(false)}
-                disabled={!selectedGoalId || updateMutation.isPending || refunding}
+                disabled={!selectedGoalId || refunding}
                 variant="outline"
                 className="flex-1 rounded-xl"
               >
-                {updateMutation.isPending || refunding ? "..." : `Devolver exceso (${formatCurrency(excess, currency)})`}
+                {refunding ? "..." : `Devolver exceso (${formatCurrency(excess, currency)})`}
               </Button>
               <Button
                 onClick={() => handleRefund(true)}
-                disabled={!selectedGoalId || updateMutation.isPending || refunding}
+                disabled={!selectedGoalId || refunding}
                 className="flex-1 rounded-xl"
               >
-                {updateMutation.isPending || refunding ? "..." : `Devolver todo (${formatCurrency(deficitCovered, currency)})`}
+                {refunding ? "..." : `Devolver todo (${formatCurrency(deficitCovered, currency)})`}
               </Button>
             </div>
           </div>
