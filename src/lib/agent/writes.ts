@@ -12,6 +12,8 @@ import {
   createTransactionSchema,
   createBudgetSchema,
   createSavingsGoalSchema,
+  createCategorySchema,
+  recurringFrequencies,
   paymentMethodsByType,
   type Category,
   type PaymentMethod,
@@ -524,5 +526,186 @@ export async function deleteGoalForOwner(ownerUid: string, id: string): Promise<
     { kind: "delete", path: `${GOALS}/${id}` },
     { kind: "increment", path: `settings/${ownerUid}`, field: "totalXP", by: -XP_VALUES.goal },
   ]);
+  return { id };
+}
+
+// ─── Categories ───────────────────────────────────────────────────────────────
+// Categories and recurring transactions carry NO XP in the app (unlike tx /
+// budgets / goals), so these mirrors touch only the document.
+
+export async function createCategoryForOwner(
+  ownerUid: string,
+  body: Record<string, unknown>
+): Promise<{ id: string; name: string; type: "income" | "expense" }> {
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) throw new AgentRequestError("name (nombre de la categoría) es obligatorio.");
+  const type = body.type;
+  if (type !== "income" && type !== "expense") {
+    throw new AgentRequestError("type debe ser 'income' o 'expense'.");
+  }
+  const icon = typeof body.icon === "string" && body.icon ? body.icon.slice(0, 30) : "🏷️";
+  const color = typeof body.color === "string" && hexColor.test(body.color) ? body.color : "#6366f1";
+
+  const parsed = createCategorySchema.safeParse({ name, icon, color, type });
+  if (!parsed.success) {
+    throw new AgentRequestError("Datos inválidos: " + parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  // order = current count, mirroring the app's createCategory (append at the end).
+  const existing = await listCollection("categories", {
+    filters: [{ field: "userId", op: "EQUAL", value: ownerUid }],
+    orderBy: null,
+  });
+
+  const now = new Date();
+  const id = newDocId();
+  await commitBatch([
+    {
+      kind: "set",
+      path: `categories/${id}`,
+      data: { name, icon, color, type, order: existing.length, isDefault: false, userId: ownerUid, createdAt: now, updatedAt: now },
+    },
+  ]);
+  return { id, name, type };
+}
+
+export async function updateCategoryForOwner(
+  ownerUid: string,
+  id: string,
+  body: Record<string, unknown>
+): Promise<{ id: string; updated: string[] }> {
+  await loadOwned("categories", id, ownerUid, "la categoría");
+  const update: Record<string, unknown> = {};
+
+  if (body.name !== undefined) {
+    const name = String(body.name).trim();
+    if (!name) throw new AgentRequestError("name no puede quedar vacío.");
+    update.name = name;
+  }
+  if (body.type !== undefined) {
+    if (body.type !== "income" && body.type !== "expense") {
+      throw new AgentRequestError("type debe ser 'income' o 'expense'.");
+    }
+    update.type = body.type;
+  }
+  if (body.icon !== undefined) update.icon = String(body.icon).slice(0, 30);
+  if (body.color !== undefined) {
+    if (!hexColor.test(String(body.color))) throw new AgentRequestError("color debe ser un hex tipo #6366f1.");
+    update.color = String(body.color);
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw new AgentRequestError("No mandaste ningún campo para editar (name, type, icon, color).");
+  }
+  update.updatedAt = new Date();
+  await commitBatch([{ kind: "update", path: `categories/${id}`, data: update }]);
+  return { id, updated: Object.keys(update).filter((k) => k !== "updatedAt") };
+}
+
+export async function deleteCategoryForOwner(ownerUid: string, id: string): Promise<{ id: string }> {
+  const cat = await loadOwned("categories", id, ownerUid, "la categoría");
+  // The default (seed) categories underpin the app's category set; refuse to
+  // delete them so a voice command can't dismantle it. Their transactions would
+  // also be left orphaned. Custom categories are fair game.
+  if (cat.isDefault === true) {
+    throw new AgentRequestError("Esa es una categoría por defecto, no se puede borrar. Solo las que creaste vos.");
+  }
+  await commitBatch([{ kind: "delete", path: `categories/${id}` }]);
+  return { id };
+}
+
+// ─── Recurring transactions (suscripciones) ───────────────────────────────────
+
+function resolveFrequency(body: Record<string, unknown>): string {
+  const freq = typeof body.frequency === "string" ? body.frequency.trim().toLowerCase() : "";
+  if (!(recurringFrequencies as readonly string[]).includes(freq)) {
+    throw new AgentRequestError(`frequency inválida. Opciones: ${recurringFrequencies.join(", ")}.`);
+  }
+  return freq;
+}
+
+export async function createRecurringForOwner(
+  ownerUid: string,
+  body: Record<string, unknown>
+): Promise<{ id: string; type: string; amount: number; category: string; frequency: string; nextDate: string }> {
+  const type = body.type;
+  if (type !== "income" && type !== "expense") throw new AgentRequestError("type debe ser 'income' o 'expense'.");
+
+  const amount = Number(body.amount);
+  if (!Number.isFinite(amount) || amount <= 0) throw new AgentRequestError("amount debe ser un número positivo.");
+
+  const description = typeof body.description === "string" ? body.description.trim() : "";
+  if (!description) throw new AgentRequestError("description es obligatoria.");
+
+  const frequency = resolveFrequency(body);
+  if (!body.nextDate) throw new AgentRequestError("nextDate (próxima fecha YYYY-MM-DD) es obligatoria.");
+  const nextDate = dateOnlyUtc(String(body.nextDate));
+
+  const categories = (await listCollection("categories", {
+    filters: [{ field: "userId", op: "EQUAL", value: ownerUid }],
+    orderBy: null,
+  })) as unknown as Category[];
+  const category = resolveCategory(categories, body, type);
+
+  const isActive = body.isActive === undefined ? true : Boolean(body.isActive);
+
+  const now = new Date();
+  const id = newDocId();
+  await commitBatch([
+    {
+      kind: "set",
+      path: `recurringTransactions/${id}`,
+      data: { type, amount, description, categoryId: category.id, frequency, nextDate, isActive, userId: ownerUid, createdAt: now, updatedAt: now },
+    },
+  ]);
+  return { id, type, amount, category: category.name, frequency, nextDate: nextDate.toISOString() };
+}
+
+export async function updateRecurringForOwner(
+  ownerUid: string,
+  id: string,
+  body: Record<string, unknown>
+): Promise<{ id: string; updated: string[] }> {
+  const existing = await loadOwned("recurringTransactions", id, ownerUid, "la suscripción");
+  const update: Record<string, unknown> = {};
+
+  let type: "income" | "expense" = existing.type === "income" ? "income" : "expense";
+  if (body.type !== undefined) {
+    if (body.type !== "income" && body.type !== "expense") throw new AgentRequestError("type debe ser 'income' o 'expense'.");
+    type = body.type;
+    update.type = type;
+  }
+  if (body.amount !== undefined) {
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new AgentRequestError("amount debe ser un número positivo.");
+    update.amount = amount;
+  }
+  if (body.description !== undefined) {
+    const description = String(body.description).trim();
+    if (!description) throw new AgentRequestError("description no puede quedar vacía.");
+    update.description = description;
+  }
+  if (body.frequency !== undefined) update.frequency = resolveFrequency(body);
+  if (body.nextDate !== undefined) update.nextDate = dateOnlyUtc(String(body.nextDate));
+  if (body.isActive !== undefined) update.isActive = Boolean(body.isActive);
+  if (body.category !== undefined || body.categoryId !== undefined) {
+    const categories = (await listCollection("categories", {
+      filters: [{ field: "userId", op: "EQUAL", value: ownerUid }],
+      orderBy: null,
+    })) as unknown as Category[];
+    update.categoryId = resolveCategory(categories, body, type).id;
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw new AgentRequestError("No mandaste ningún campo para editar (amount, description, category, frequency, nextDate, type, isActive).");
+  }
+  update.updatedAt = new Date();
+  await commitBatch([{ kind: "update", path: `recurringTransactions/${id}`, data: update }]);
+  return { id, updated: Object.keys(update).filter((k) => k !== "updatedAt") };
+}
+
+export async function deleteRecurringForOwner(ownerUid: string, id: string): Promise<{ id: string }> {
+  await loadOwned("recurringTransactions", id, ownerUid, "la suscripción");
+  await commitBatch([{ kind: "delete", path: `recurringTransactions/${id}` }]);
   return { id };
 }

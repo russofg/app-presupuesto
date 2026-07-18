@@ -21,13 +21,17 @@ import {
   updateGoalForOwner,
   contributeGoalForOwner,
   deleteGoalForOwner,
+  updateCategoryForOwner,
+  deleteCategoryForOwner,
+  updateRecurringForOwner,
+  deleteRecurringForOwner,
   AgentRequestError,
 } from "@/lib/agent/writes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const WRITABLE = new Set(["transactions", "budgets", "goals"]);
+const WRITABLE = new Set(["transactions", "budgets", "goals", "categories", "recurring"]);
 
 /** Shared auth handling; returns the owner uid or a Response to return early. */
 function authenticate(request: Request): string | NextResponse {
@@ -69,6 +73,12 @@ export async function PUT(
     if (resource === "budgets") {
       return NextResponse.json({ ok: true, ...(await updateBudgetForOwner(ownerUid, id, body)) });
     }
+    if (resource === "categories") {
+      return NextResponse.json({ ok: true, ...(await updateCategoryForOwner(ownerUid, id, body)) });
+    }
+    if (resource === "recurring") {
+      return NextResponse.json({ ok: true, ...(await updateRecurringForOwner(ownerUid, id, body)) });
+    }
     // goals: a `contribute` number moves the saved amount; otherwise edit fields.
     if (body.contribute !== undefined) {
       return NextResponse.json({ ok: true, ...(await contributeGoalForOwner(ownerUid, id, body.contribute)) });
@@ -102,6 +112,12 @@ export async function DELETE(
     }
     if (resource === "budgets") {
       return NextResponse.json({ ok: true, ...(await deleteBudgetForOwner(ownerUid, id)) });
+    }
+    if (resource === "categories") {
+      return NextResponse.json({ ok: true, ...(await deleteCategoryForOwner(ownerUid, id)) });
+    }
+    if (resource === "recurring") {
+      return NextResponse.json({ ok: true, ...(await deleteRecurringForOwner(ownerUid, id)) });
     }
     return NextResponse.json({ ok: true, ...(await deleteGoalForOwner(ownerUid, id)) });
   } catch (err) {

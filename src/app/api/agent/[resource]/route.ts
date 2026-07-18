@@ -20,6 +20,8 @@ import {
   createTransactionForOwner,
   createBudgetForOwner,
   createGoalForOwner,
+  createCategoryForOwner,
+  createRecurringForOwner,
   AgentRequestError,
 } from "@/lib/agent/writes";
 
@@ -104,7 +106,8 @@ export async function POST(
   const ownerUid = auth;
 
   const { resource } = await params;
-  if (resource !== "transactions" && resource !== "budgets" && resource !== "goals") {
+  const CREATABLE = ["transactions", "budgets", "goals", "categories", "recurring"];
+  if (!CREATABLE.includes(resource)) {
     return NextResponse.json(
       { error: `Creación no soportada para '${resource}' todavía` },
       { status: 405 }
@@ -127,8 +130,16 @@ export async function POST(
       const budget = await createBudgetForOwner(ownerUid, body);
       return NextResponse.json({ ok: true, budget }, { status: 201 });
     }
-    const goal = await createGoalForOwner(ownerUid, body);
-    return NextResponse.json({ ok: true, goal }, { status: 201 });
+    if (resource === "goals") {
+      const goal = await createGoalForOwner(ownerUid, body);
+      return NextResponse.json({ ok: true, goal }, { status: 201 });
+    }
+    if (resource === "categories") {
+      const category = await createCategoryForOwner(ownerUid, body);
+      return NextResponse.json({ ok: true, category }, { status: 201 });
+    }
+    const recurring = await createRecurringForOwner(ownerUid, body);
+    return NextResponse.json({ ok: true, recurring }, { status: 201 });
   } catch (err) {
     if (err instanceof AgentRequestError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
