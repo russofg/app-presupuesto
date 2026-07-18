@@ -16,7 +16,12 @@ import { requireAgentAuth, AgentAuthError } from "@/lib/agent/auth";
 import { listCollection, type QueryFilter } from "@/lib/agent/firestore-rest";
 import { getResource } from "@/lib/agent/resources";
 import { monthRange, resolveMonthYear } from "@/lib/agent/time";
-import { createTransactionForOwner, AgentRequestError } from "@/lib/agent/writes";
+import {
+  createTransactionForOwner,
+  createBudgetForOwner,
+  createGoalForOwner,
+  AgentRequestError,
+} from "@/lib/agent/writes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,9 +104,9 @@ export async function POST(
   const ownerUid = auth;
 
   const { resource } = await params;
-  if (resource !== "transactions") {
+  if (resource !== "transactions" && resource !== "budgets" && resource !== "goals") {
     return NextResponse.json(
-      { error: `Escritura no soportada para '${resource}' todavía` },
+      { error: `Creación no soportada para '${resource}' todavía` },
       { status: 405 }
     );
   }
@@ -114,13 +119,21 @@ export async function POST(
   }
 
   try {
-    const transaction = await createTransactionForOwner(ownerUid, body);
-    return NextResponse.json({ ok: true, transaction }, { status: 201 });
+    if (resource === "transactions") {
+      const transaction = await createTransactionForOwner(ownerUid, body);
+      return NextResponse.json({ ok: true, transaction }, { status: 201 });
+    }
+    if (resource === "budgets") {
+      const budget = await createBudgetForOwner(ownerUid, body);
+      return NextResponse.json({ ok: true, budget }, { status: 201 });
+    }
+    const goal = await createGoalForOwner(ownerUid, body);
+    return NextResponse.json({ ok: true, goal }, { status: 201 });
   } catch (err) {
     if (err instanceof AgentRequestError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
-    console.error("[agent] create transaction error:", err);
-    return NextResponse.json({ error: "No se pudo crear la transacción" }, { status: 502 });
+    console.error(`[agent] create ${resource} error:`, err);
+    return NextResponse.json({ error: `No se pudo crear en '${resource}'` }, { status: 502 });
   }
 }

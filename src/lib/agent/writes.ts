@@ -8,10 +8,19 @@
  * own Zod schema (createTransactionSchema) as the source of truth.
  */
 
-import { createTransactionSchema, paymentMethodsByType, type Category, type PaymentMethod } from "@/types";
+import {
+  createTransactionSchema,
+  createBudgetSchema,
+  createSavingsGoalSchema,
+  paymentMethodsByType,
+  type Category,
+  type PaymentMethod,
+} from "@/types";
 import { listCollection, commitBatch, newDocId, getDocument, type DocRecord } from "@/lib/agent/firestore-rest";
-import { dateOnlyUtc } from "@/lib/agent/time";
+import { dateOnlyUtc, currentMonthYear } from "@/lib/agent/time";
 import { XP_VALUES } from "@/lib/gamification";
+
+const hexColor = /^#[0-9a-fA-F]{6}$/;
 
 export class AgentRequestError extends Error {
   status: number;
@@ -292,6 +301,228 @@ export async function deleteTransactionForOwner(
   await commitBatch([
     { kind: "delete", path: `transactions/${id}` },
     { kind: "increment", path: `settings/${ownerUid}`, field: "totalXP", by: -XP_VALUES.transaction },
+  ]);
+  return { id };
+}
+
+// ─── Budgets ──────────────────────────────────────────────────────────────────
+
+/** Resolves a category by id or name (exact, then unique partial) across all of
+ *  the owner's categories, so a budget can be created by naming its category. */
+function resolveCategoryByName(categories: Category[], body: Record<string, unknown>): Category {
+  const optionsMsg = `Opciones: ${categories.map((c) => c.name).join(", ") || "(ninguna)"}`;
+  if (typeof body.categoryId === "string" && body.categoryId) {
+    const c = categories.find((cat) => cat.id === body.categoryId);
+    if (!c) throw new AgentRequestError(`categoryId no existe. ${optionsMsg}`);
+    return c;
+  }
+  const raw = typeof body.category === "string" ? body.category.trim() : "";
+  if (!raw) throw new AgentRequestError(`Falta la categoría. ${optionsMsg}`);
+  const name = raw.toLowerCase();
+  const exact = categories.filter((c) => c.name.toLowerCase() === name);
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) throw new AgentRequestError(`Categoría ambigua '${raw}'. ${optionsMsg}`);
+  const partial = categories.filter((c) => c.name.toLowerCase().includes(name));
+  if (partial.length === 1) return partial[0];
+  throw new AgentRequestError(`No encontré la categoría '${raw}'. ${optionsMsg}`);
+}
+
+/** month/year from the body, defaulting to the current Argentina month. */
+function resolveBudgetPeriod(body: Record<string, unknown>): { month: number; year: number } {
+  const now = currentMonthYear();
+  const month = body.month !== undefined ? Number(body.month) : now.month;
+  const year = body.year !== undefined ? Number(body.year) : now.year;
+  return { month, year };
+}
+
+export async function createBudgetForOwner(
+  ownerUid: string,
+  body: Record<string, unknown>
+): Promise<{ id: string; category: string; amount: number; month: number; year: number }> {
+  const categories = (await listCollection("categories", {
+    filters: [{ field: "userId", op: "EQUAL", value: ownerUid }],
+    orderBy: null,
+  })) as unknown as Category[];
+  const category = resolveCategoryByName(categories, body);
+
+  const amount = Number(body.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new AgentRequestError("amount (límite del presupuesto) debe ser un número positivo.");
+  }
+  const { month, year } = resolveBudgetPeriod(body);
+
+  const parsed = createBudgetSchema.safeParse({ categoryId: category.id, amount, month, year });
+  if (!parsed.success) {
+    throw new AgentRequestError("Datos inválidos: " + parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const now = new Date();
+  const id = newDocId();
+  await commitBatch([
+    {
+      kind: "set",
+      path: `budgets/${id}`,
+      data: { categoryId: category.id, amount, month, year, userId: ownerUid, spent: 0, createdAt: now, updatedAt: now },
+    },
+    { kind: "increment", path: `settings/${ownerUid}`, field: "totalXP", by: XP_VALUES.budget },
+  ]);
+  return { id, category: category.name, amount, month, year };
+}
+
+export async function updateBudgetForOwner(
+  ownerUid: string,
+  id: string,
+  body: Record<string, unknown>
+): Promise<{ id: string; updated: string[] }> {
+  await loadOwned("budgets", id, ownerUid, "el presupuesto");
+  const update: Record<string, unknown> = {};
+
+  if (body.amount !== undefined) {
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new AgentRequestError("amount debe ser un número positivo.");
+    update.amount = amount;
+  }
+  if (body.category !== undefined || body.categoryId !== undefined) {
+    const categories = (await listCollection("categories", {
+      filters: [{ field: "userId", op: "EQUAL", value: ownerUid }],
+      orderBy: null,
+    })) as unknown as Category[];
+    update.categoryId = resolveCategoryByName(categories, body).id;
+  }
+  if (body.month !== undefined) update.month = Number(body.month);
+  if (body.year !== undefined) update.year = Number(body.year);
+
+  if (Object.keys(update).length === 0) {
+    throw new AgentRequestError("No mandaste ningún campo para editar (amount, category, month, year).");
+  }
+  update.updatedAt = new Date();
+  await commitBatch([{ kind: "update", path: `budgets/${id}`, data: update }]);
+  return { id, updated: Object.keys(update).filter((k) => k !== "updatedAt") };
+}
+
+export async function deleteBudgetForOwner(ownerUid: string, id: string): Promise<{ id: string }> {
+  await loadOwned("budgets", id, ownerUid, "el presupuesto");
+  await commitBatch([
+    { kind: "delete", path: `budgets/${id}` },
+    { kind: "increment", path: `settings/${ownerUid}`, field: "totalXP", by: -XP_VALUES.budget },
+  ]);
+  return { id };
+}
+
+// ─── Savings goals ────────────────────────────────────────────────────────────
+
+/** goals live in the `savingsGoals` collection (see resources.ts). */
+const GOALS = "savingsGoals";
+
+export async function createGoalForOwner(
+  ownerUid: string,
+  body: Record<string, unknown>
+): Promise<{ id: string; name: string; targetAmount: number }> {
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) throw new AgentRequestError("name (nombre de la meta) es obligatorio.");
+
+  const targetAmount = Number(body.targetAmount ?? body.amount);
+  if (!Number.isFinite(targetAmount) || targetAmount <= 0) {
+    throw new AgentRequestError("targetAmount (monto objetivo) debe ser un número positivo.");
+  }
+
+  // icon/color aren't things Fer would dictate by voice — default to sensible ones.
+  const icon = typeof body.icon === "string" && body.icon ? body.icon.slice(0, 10) : "🎯";
+  const color = typeof body.color === "string" && hexColor.test(body.color) ? body.color : "#6366f1";
+  const deadline = body.deadline ? dateOnlyUtc(String(body.deadline)) : null;
+
+  const parsed = createSavingsGoalSchema.safeParse({
+    name,
+    targetAmount,
+    icon,
+    color,
+    deadline: deadline ?? undefined,
+  });
+  if (!parsed.success) {
+    throw new AgentRequestError("Datos inválidos: " + parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const now = new Date();
+  const id = newDocId();
+  await commitBatch([
+    {
+      kind: "set",
+      path: `${GOALS}/${id}`,
+      data: { name, targetAmount, icon, color, currentAmount: 0, deadline, userId: ownerUid, createdAt: now, updatedAt: now },
+    },
+    { kind: "increment", path: `settings/${ownerUid}`, field: "totalXP", by: XP_VALUES.goal },
+  ]);
+  return { id, name, targetAmount };
+}
+
+export async function updateGoalForOwner(
+  ownerUid: string,
+  id: string,
+  body: Record<string, unknown>
+): Promise<{ id: string; updated: string[] }> {
+  await loadOwned(GOALS, id, ownerUid, "la meta");
+  const update: Record<string, unknown> = {};
+
+  if (body.name !== undefined) {
+    const name = String(body.name).trim();
+    if (!name) throw new AgentRequestError("name no puede quedar vacío.");
+    update.name = name;
+  }
+  if (body.targetAmount !== undefined || body.amount !== undefined) {
+    const t = Number(body.targetAmount ?? body.amount);
+    if (!Number.isFinite(t) || t <= 0) throw new AgentRequestError("targetAmount debe ser un número positivo.");
+    update.targetAmount = t;
+  }
+  if (body.deadline !== undefined) {
+    update.deadline = body.deadline ? dateOnlyUtc(String(body.deadline)) : null;
+  }
+  if (body.icon !== undefined) update.icon = String(body.icon).slice(0, 10);
+  if (body.color !== undefined) {
+    if (!hexColor.test(String(body.color))) throw new AgentRequestError("color debe ser un hex tipo #6366f1.");
+    update.color = String(body.color);
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw new AgentRequestError("No mandaste ningún campo para editar (name, targetAmount, deadline, icon, color).");
+  }
+  update.updatedAt = new Date();
+  await commitBatch([{ kind: "update", path: `${GOALS}/${id}`, data: update }]);
+  return { id, updated: Object.keys(update).filter((k) => k !== "updatedAt") };
+}
+
+/**
+ * Adds money to (or, with a negative amount, takes money out of) a goal by
+ * moving its currentAmount, mirroring the app's "actualizar meta" flow (a plain
+ * updateSavingsGoal on currentAmount — no XP, no separate transaction). Never
+ * lets currentAmount drop below zero.
+ */
+export async function contributeGoalForOwner(
+  ownerUid: string,
+  id: string,
+  amountRaw: unknown
+): Promise<{ id: string; name: string; previous: number; current: number; targetAmount: number }> {
+  const goal = await loadOwned(GOALS, id, ownerUid, "la meta");
+  const amount = Number(amountRaw);
+  if (!Number.isFinite(amount) || amount === 0) {
+    throw new AgentRequestError("amount debe ser un número (positivo para sumar, negativo para retirar).");
+  }
+  const previous = Number(goal.currentAmount ?? 0);
+  const current = Math.max(0, previous + amount);
+  await commitBatch([{ kind: "update", path: `${GOALS}/${id}`, data: { currentAmount: current, updatedAt: new Date() } }]);
+  return {
+    id,
+    name: typeof goal.name === "string" ? goal.name : "",
+    previous,
+    current,
+    targetAmount: Number(goal.targetAmount ?? 0),
+  };
+}
+
+export async function deleteGoalForOwner(ownerUid: string, id: string): Promise<{ id: string }> {
+  await loadOwned(GOALS, id, ownerUid, "la meta");
+  await commitBatch([
+    { kind: "delete", path: `${GOALS}/${id}` },
+    { kind: "increment", path: `settings/${ownerUid}`, field: "totalXP", by: -XP_VALUES.goal },
   ]);
   return { id };
 }
