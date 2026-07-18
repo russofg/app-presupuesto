@@ -9,16 +9,36 @@
  */
 
 import { createTransactionSchema, paymentMethodsByType, type Category, type PaymentMethod } from "@/types";
-import { listCollection, commitBatch, newDocId } from "@/lib/agent/firestore-rest";
+import { listCollection, commitBatch, newDocId, getDocument, type DocRecord } from "@/lib/agent/firestore-rest";
 import { dateOnlyUtc } from "@/lib/agent/time";
 import { XP_VALUES } from "@/lib/gamification";
 
 export class AgentRequestError extends Error {
-  status = 400;
-  constructor(message: string) {
+  status: number;
+  constructor(message: string, status = 400) {
     super(message);
     this.name = "AgentRequestError";
+    this.status = status;
   }
+}
+
+/**
+ * Loads a document and asserts it belongs to the owner, throwing a 404 otherwise.
+ * Every update/delete goes through here so the agent can never touch another
+ * user's document by guessing an id — ownership is enforced server-side, not
+ * trusted from the caller.
+ */
+async function loadOwned(
+  collection: string,
+  id: string,
+  ownerUid: string,
+  label: string
+): Promise<DocRecord> {
+  const doc = await getDocument(collection, id);
+  if (!doc || doc.userId !== ownerUid) {
+    throw new AgentRequestError(`No encontré ${label} con id '${id}'.`, 404);
+  }
+  return doc;
 }
 
 export interface CreatedTransaction {
@@ -164,4 +184,114 @@ export async function createTransactionForOwner(
     paymentMethod,
     notes,
   };
+}
+
+/**
+ * Partially edits one of the owner's transactions, mirroring the app's
+ * updateTransaction: it touches only the provided fields (+ updatedAt) and does
+ * NOT change XP (XP moves only on create/delete). Only the fields present in the
+ * body are updated; anything omitted is left untouched.
+ *
+ * Category handling: if a category is given (by name or id) it is re-resolved
+ * against the effective type. If the type changes but no category is given, the
+ * existing category must already match the new type, otherwise a category is
+ * required (the app never lets an income use an expense category).
+ */
+export async function updateTransactionForOwner(
+  ownerUid: string,
+  id: string,
+  body: Record<string, unknown>
+): Promise<{ id: string; updated: string[] }> {
+  const existing = await loadOwned("transactions", id, ownerUid, "la transacción");
+
+  const update: Record<string, unknown> = {};
+
+  let type: "income" | "expense" = existing.type === "income" ? "income" : "expense";
+  if (body.type !== undefined) {
+    if (body.type !== "income" && body.type !== "expense") {
+      throw new AgentRequestError("type debe ser 'income' o 'expense'.");
+    }
+    type = body.type;
+    update.type = type;
+  }
+
+  if (body.amount !== undefined) {
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new AgentRequestError("amount debe ser un número positivo.");
+    }
+    update.amount = amount;
+  }
+
+  if (body.description !== undefined) {
+    const description = typeof body.description === "string" ? body.description.trim() : "";
+    if (!description) throw new AgentRequestError("description no puede quedar vacía.");
+    update.description = description;
+  }
+
+  const wantsCategory =
+    body.category !== undefined || body.categoryId !== undefined || body.type !== undefined;
+  if (wantsCategory) {
+    const categories = (await listCollection("categories", {
+      filters: [{ field: "userId", op: "EQUAL", value: ownerUid }],
+      orderBy: null,
+    })) as unknown as Category[];
+
+    if (body.category === undefined && body.categoryId === undefined) {
+      // Type-only change: keep the existing category only if it already matches.
+      const current = categories.find((c) => c.id === existing.categoryId);
+      if (!current || current.type !== type) {
+        const opts = categories.filter((c) => c.type === type).map((c) => c.name).join(", ") || "(ninguna)";
+        throw new AgentRequestError(`Cambiaste el tipo a ${type}: necesito una categoría de ${type}. Opciones: ${opts}`);
+      }
+    } else {
+      update.categoryId = resolveCategory(categories, body, type).id;
+    }
+  }
+
+  if (body.date !== undefined) {
+    update.date = dateOnlyUtc(typeof body.date === "string" ? body.date : null);
+  }
+
+  if (body.paymentMethod !== undefined && body.paymentMethod !== null) {
+    const pm = body.paymentMethod as PaymentMethod;
+    if (!paymentMethodsByType[type].includes(pm)) {
+      throw new AgentRequestError(
+        `paymentMethod inválido para ${type}. Opciones: ${paymentMethodsByType[type].join(", ")}.`
+      );
+    }
+    update.paymentMethod = pm;
+  }
+
+  if (body.notes !== undefined) {
+    update.notes = typeof body.notes === "string" ? body.notes.slice(0, 500) : "";
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw new AgentRequestError(
+      "No mandaste ningún campo para editar (amount, description, category, type, date, paymentMethod, notes)."
+    );
+  }
+
+  update.updatedAt = new Date();
+  await commitBatch([{ kind: "update", path: `transactions/${id}`, data: update }]);
+
+  return { id, updated: Object.keys(update).filter((k) => k !== "updatedAt") };
+}
+
+/**
+ * Deletes one of the owner's transactions, mirroring the app's deleteTransaction:
+ * the doc is removed and settings.totalXP is decremented by the same amount the
+ * create awarded, in a single atomic commit.
+ */
+export async function deleteTransactionForOwner(
+  ownerUid: string,
+  id: string
+): Promise<{ id: string }> {
+  await loadOwned("transactions", id, ownerUid, "la transacción");
+  await commitBatch([
+    { kind: "delete", path: `transactions/${id}` },
+    { kind: "increment", path: `settings/${ownerUid}`, field: "totalXP", by: -XP_VALUES.transaction },
+  ]);
+  return { id };
 }

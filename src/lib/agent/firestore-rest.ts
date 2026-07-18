@@ -291,6 +291,7 @@ export function newDocId(): string {
 
 export type CommitOp =
   | { kind: "set"; path: string; data: Record<string, unknown> }
+  | { kind: "update"; path: string; data: Record<string, unknown> }
   | { kind: "delete"; path: string }
   | { kind: "increment"; path: string; field: string; by: number };
 
@@ -308,6 +309,12 @@ export async function commitBatch(ops: CommitOp[]): Promise<void> {
     const name = `${prefix}/${op.path}`;
     if (op.kind === "set") {
       return { update: { name, fields: encodeFields(op.data) } };
+    }
+    if (op.kind === "update") {
+      // Partial update: an updateMask makes Firestore touch ONLY these fields
+      // (mirrors the app's updateDoc), instead of replacing the whole document.
+      const fields = encodeFields(op.data);
+      return { update: { name, fields }, updateMask: { fieldPaths: Object.keys(fields) } };
     }
     if (op.kind === "delete") {
       return { delete: name };
